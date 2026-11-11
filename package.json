@@ -1,0 +1,25 @@
+{
+  "name": "pcs",
+  "version": "0.1.0",
+  "description": "Project Continuity System - AI-independent development continuity and handoff",
+  "type": "module",
+  "bin": { "pcs": "dist/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "test": "vitest run",
+    "dev": "tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^3.0.0"
+  }
+}
