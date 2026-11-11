@@ -1,9 +1,23 @@
 import { Command } from "commander";
-import { exitCodeFor, getStatus, initProject, verifyProject, type Status } from "../core";
+import {
+  addTask,
+  exitCodeFor,
+  getStatus,
+  initProject,
+  listTasks,
+  updateTask,
+  verifyProject,
+  type Status,
+  type Task,
+} from "../core";
 
-/** Repo-controlled strings (paths, commit subjects) can carry terminal escape sequences. */
+/** Repo-controlled strings (paths, commit subjects, titles) can carry terminal escape sequences. */
 function safe(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
+}
+
+function formatTask(t: Task): string {
+  return `#${t.id} [${t.status}] ${safe(t.title)}`;
 }
 
 function formatStatus(s: Status): string {
@@ -19,6 +33,10 @@ function formatStatus(s: Status): string {
       ? `Log:     OK (${integrity.count} events, hash chain verified)`
       : `Log:     INTEGRITY FAILURE at event #${integrity.brokenAt}: ${integrity.reason}`,
   ];
+  lines.push("", `Open tasks (${s.openTasks.length}):`);
+  if (s.openTasks.length === 0) lines.push("  (none)");
+  for (const t of s.openTasks) lines.push(`  ${formatTask(t)}`);
+
   lines.push("", `Changed files (${git.changed.length}):`);
   if (git.changed.length === 0) lines.push("  (working tree clean)");
   for (const f of git.changed) {
@@ -45,7 +63,7 @@ program
 
 program
   .command("status")
-  .description("Show the actual project state from git")
+  .description("Show the actual project state from git, plus open tasks")
   .option("--json", "output JSON")
   .action(async (opts: { json?: boolean }) => {
     const s = await getStatus(process.cwd());
@@ -64,6 +82,44 @@ program
       console.error(`Integrity FAILED at event #${r.brokenAt}: ${r.reason}`);
       process.exitCode = 2;
     }
+  });
+
+const task = program.command("task").description("Track tasks (status changes are recorded as reported events)");
+
+task
+  .command("add <title...>")
+  .description("Add a task")
+  .option("--agent <name>", "who is reporting this", "user")
+  .action(async (title: string[], opts: { agent: string }) => {
+    const t = await addTask(process.cwd(), title.join(" "), opts.agent);
+    console.log(`Added ${formatTask(t)}`);
+  });
+
+task
+  .command("list")
+  .description("List tasks")
+  .option("--status <status>", "todo | in_progress | done | blocked")
+  .option("--json", "output JSON")
+  .action(async (opts: { status?: string; json?: boolean }) => {
+    const tasks = await listTasks(process.cwd(), opts.status);
+    if (opts.json) console.log(JSON.stringify(tasks, null, 2));
+    else if (tasks.length === 0) console.log("(no tasks)");
+    else for (const t of tasks) console.log(formatTask(t));
+  });
+
+task
+  .command("update <id>")
+  .description("Change a task's status")
+  .requiredOption("--status <status>", "todo | in_progress | done | blocked")
+  .option("--note <text>", "short note about the change")
+  .option("--agent <name>", "who is reporting this", "user")
+  .action(async (id: string, opts: { status: string; note?: string; agent: string }) => {
+    const t = await updateTask(process.cwd(), Number(id), {
+      status: opts.status,
+      note: opts.note,
+      source: opts.agent,
+    });
+    console.log(`Updated ${formatTask(t)}`);
   });
 
 program.parseAsync().catch((err: unknown) => {

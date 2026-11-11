@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendEvent,
   canonicalJson,
-  GENESIS_HASH,
+  GENESIS_HASH,  MIGRATIONS,
   openDb,
   PcsError,
   verifyChain,
@@ -95,7 +95,7 @@ describe("redaction on write", () => {
 describe("migrations", () => {
   it("sets the schema version and reopens cleanly", () => {
     const v = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-    expect(v).toBe(1);
+    expect(v).toBe(MIGRATIONS.length);
     ev("a");
     db.close();
     db = openDb(dir);
@@ -115,3 +115,4 @@ describe("migrations", () => {
     expect((caught as PcsError).code).toBe("SCHEMA_TOO_NEW");
   });
 });
+

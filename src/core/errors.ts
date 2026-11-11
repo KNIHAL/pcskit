@@ -3,7 +3,8 @@ export type PcsErrorCode =
   | "NOT_INITIALIZED"
   | "INTEGRITY_FAILURE"
   | "SCHEMA_TOO_NEW"
-  | "GIT_FAILURE";
+  | "GIT_FAILURE"
+  | "INVALID_INPUT";
 
 export class PcsError extends Error {
   readonly code: PcsErrorCode;

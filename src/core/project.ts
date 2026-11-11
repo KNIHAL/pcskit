@@ -1,9 +1,11 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { dbPath, inTransaction, openDb, PCS_DIR, type Db } from "./db";
+import { requireInitializedRoot, withDb } from "./context";
+import { inTransaction, openDb, PCS_DIR, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent, recentEvents, verifyChain, type ChainReport, type EventRow } from "./events";
 import { findGitRoot, getGitState, type GitState } from "./git";
+import { openTasks, type Task } from "./tasks";
 
 export interface ProjectInfo {
   name: string;
@@ -14,6 +16,7 @@ export interface ProjectInfo {
 export interface Status {
   project: ProjectInfo;
   git: Extract<GitState, { isRepo: true }>;
+  openTasks: Task[];
   recentEvents: EventRow[];
   integrity: ChainReport;
 }
@@ -40,15 +43,6 @@ function excludeFromGit(root: string): void {
   } catch {
     // .git may be a file (worktree/submodule); skip silently, .pcs/ is just untracked then.
   }
-}
-
-async function requireInitializedRoot(cwd: string): Promise<string> {
-  const root = await findGitRoot(cwd);
-  if (!root) throw new PcsError("NOT_GIT_REPO", "Not inside a git repository.");
-  if (!existsSync(dbPath(root))) {
-    throw new PcsError("NOT_INITIALIZED", "PCS is not initialized here. Run `pcs init` first.");
-  }
-  return root;
 }
 
 export async function initProject(cwd: string): Promise<InitResult> {
@@ -90,22 +84,19 @@ export async function getStatus(cwd: string): Promise<Status> {
   const git = await getGitState(root);
   if (!git.isRepo) throw new PcsError("NOT_GIT_REPO", "Not inside a git repository.");
 
-  const db = openDb(root);
-  try {
+  return withDb(root, (db) => {
     const project = readProject(db);
     if (!project) throw new PcsError("NOT_INITIALIZED", "PCS is not initialized here. Run `pcs init` first.");
-    return { project, git, recentEvents: recentEvents(db, 5), integrity: verifyChain(db) };
-  } finally {
-    db.close();
-  }
+    return {
+      project,
+      git,
+      openTasks: openTasks(db),
+      recentEvents: recentEvents(db, 5),
+      integrity: verifyChain(db),
+    };
+  });
 }
 
 export async function verifyProject(cwd: string): Promise<ChainReport> {
-  const root = await requireInitializedRoot(cwd);
-  const db = openDb(root);
-  try {
-    return verifyChain(db);
-  } finally {
-    db.close();
-  }
+  return withDb(cwd, (db) => verifyChain(db));
 }
