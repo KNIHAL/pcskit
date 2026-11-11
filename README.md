@@ -21,15 +21,18 @@ node dist/cli.js --help
 | --- | --- |
 | `pcs init` | Register the current git repo (creates git-excluded `.pcs/`) |
 | `pcs status [--json]` | Real git state, active session, open tasks, log integrity |
-| `pcs verify` | Verify the tamper-evident event log (exit 2 if broken) |
-| `pcs session start --agent <name>` | Start a session (an unended one is marked interrupted) |
-| `pcs session end [--reason r] [--note t]` | End it (`completed`, `limit`, `switched`) |
+| `pcs verify` | Verify the event log and snapshots are untampered (exit 2 if broken) |
+| `pcs session start --agent <name>` | Start a session (an unended one is marked interrupted) and snapshot the repo |
+| `pcs session end [--reason r] [--note t]` | End it (`completed`, `limit`, `switched`) and snapshot the repo |
 | `pcs session current` / `pcs session list` | Show active / recent sessions |
+| `pcs snapshot` | Record a verified snapshot now (git state + content hashes) |
+| `pcs snapshot list` | List snapshots |
+| `pcs snapshot diff [from] [to] [--session id]` | What changed between snapshots, plus commits made in between |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
 
 ## Layout
-- `src/core`: all logic (git adapter, SQLite store, events, sessions, tasks, redaction)
+- `src/core`: all logic (git adapter, SQLite store, events, sessions, snapshots, tasks, redaction)
 - `src/cli`: argument parsing and output only
 - `tests`: vitest suites

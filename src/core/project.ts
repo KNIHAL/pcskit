@@ -3,8 +3,9 @@ import { basename, join } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, openDb, PCS_DIR, type Db } from "./db";
 import { PcsError } from "./errors";
-import { insertEvent, recentEvents, verifyChain, type ChainReport, type EventRow } from "./events";
+import { insertEvent, recentEvents, type ChainReport, type EventRow } from "./events";
 import { findGitRoot, getGitState, type GitState } from "./git";
+import { verifyIntegrity } from "./integrity";
 import { activeSession, type Session } from "./sessions";
 import { openTasks, type Task } from "./tasks";
 
@@ -95,11 +96,12 @@ export async function getStatus(cwd: string): Promise<Status> {
       session: activeSession(db),
       openTasks: openTasks(db),
       recentEvents: recentEvents(db, 5),
-      integrity: verifyChain(db),
+      integrity: verifyIntegrity(db),
     };
   });
 }
 
 export async function verifyProject(cwd: string): Promise<ChainReport> {
-  return withDb(cwd, (db) => verifyChain(db));
+  return withDb(cwd, (db) => verifyIntegrity(db));
 }
+

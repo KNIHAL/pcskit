@@ -1,17 +1,24 @@
 import { Command } from "commander";
 import {
   addTask,
+  compareSnapshots,
   currentSession,
   endSession,
   exitCodeFor,
   getStatus,
   initProject,
   listSessions,
+  listSnapshots,
   listTasks,
   startSession,
+  takeSnapshot,
   updateTask,
   verifyProject,
+  type ChainReport,
   type Session,
+  type Snapshot,
+  type SnapshotComparison,
+  type SnapshotFile,
   type Status,
   type Task,
 } from "../core";
@@ -30,6 +37,22 @@ function formatSession(s: Session): string {
   return `#${s.id} ${safe(s.agent)}  started ${s.started_at}  ${state}`;
 }
 
+function short(hash: string | null): string {
+  return hash ? hash.slice(0, 7) : "(none)";
+}
+
+function formatSnapshotLine(s: Snapshot | null, failedMessage: string): string {
+  return s
+    ? `Snapshot #${s.id} (${s.kind}): HEAD ${short(s.head)}, ${s.files.length} changed file(s)${s.truncated ? " [truncated]" : ""}`
+    : failedMessage;
+}
+
+function integrityLine(i: ChainReport): string {
+  return i.ok
+    ? `OK (${i.count} events, hash chain and snapshots verified)`
+    : `INTEGRITY FAILURE${i.brokenAt !== undefined ? ` at event #${i.brokenAt}` : ""}: ${i.reason}`;
+}
+
 function formatStatus(s: Status): string {
   const { project, git, integrity } = s;
   const lines = [
@@ -42,9 +65,7 @@ function formatStatus(s: Status): string {
     s.session
       ? `Session: #${s.session.id} ${safe(s.session.agent)} (since ${s.session.started_at})`
       : "Session: (none active)",
-    integrity.ok
-      ? `Log:     OK (${integrity.count} events, hash chain verified)`
-      : `Log:     INTEGRITY FAILURE at event #${integrity.brokenAt}: ${integrity.reason}`,
+    `Log:     ${integrityLine(integrity)}`,
   ];
   lines.push("", `Open tasks (${s.openTasks.length}):`);
   if (s.openTasks.length === 0) lines.push("  (none)");
@@ -56,6 +77,50 @@ function formatStatus(s: Status): string {
     const tag = f.untracked ? "??" : `${f.index}${f.worktree}`.replace(/ /g, "_");
     lines.push(`  ${tag}  ${safe(f.path)}${f.sensitive ? "  [sensitive: content never included]" : ""}`);
   }
+  return lines.join("\n");
+}
+
+function fileTag(f: SnapshotFile): string {
+  if (f.sensitive) return " [sensitive: name only]";
+  if (f.kind === "missing") return " [deleted]";
+  if (f.note === "too-large") return " [too large to hash]";
+  return "";
+}
+
+function formatComparison(c: SnapshotComparison): string {
+  const lines = [
+    `Snapshot #${c.from} -> #${c.to}  (all of this was observed by PCS)`,
+    `Branch: ${safe(c.branch.from)}${c.branch.changed ? ` -> ${safe(c.branch.to)}` : " (unchanged)"}`,
+    `HEAD:   ${short(c.head.from)}${c.head.changed ? ` -> ${short(c.head.to)}` : " (unchanged)"}`,
+  ];
+  if (c.incomplete) lines.push("Note: a snapshot hit the file cap; lists below may be incomplete.");
+  if (c.historyNote) lines.push(`Note: ${c.historyNote}`);
+
+  lines.push("", `Commits made (${c.commits.length}):`);
+  if (c.commits.length === 0) lines.push("  (none)");
+  for (const k of c.commits) lines.push(`  ${short(k.hash)} ${safe(k.subject)}`);
+
+  if (c.committedFiles.length > 0) {
+    lines.push("", `Files changed by those commits (${c.committedFiles.length}):`);
+    for (const f of c.committedFiles) lines.push(`  ${safe(f.status)}  ${safe(f.path)}`);
+  }
+
+  lines.push("", `New uncommitted changes (${c.added.length}):`);
+  if (c.added.length === 0) lines.push("  (none)");
+  for (const f of c.added) lines.push(`  ${safe(f.path)}${fileTag(f)}`);
+
+  lines.push("", `Changed again since (${c.modified.length}):`);
+  if (c.modified.length === 0) lines.push("  (none)");
+  for (const m of c.modified) {
+    const why = [m.contentChanged ? "content" : "", m.statusChanged ? "git status" : ""].filter(Boolean).join(" + ");
+    lines.push(`  ${safe(m.path)}  (${why})${fileTag(m.after)}`);
+  }
+
+  lines.push("", `No longer differ from HEAD (committed, reverted or stashed) (${c.resolved.length}):`);
+  if (c.resolved.length === 0) lines.push("  (none)");
+  for (const f of c.resolved) lines.push(`  ${safe(f.path)}`);
+
+  lines.push("", `Unchanged between snapshots: ${c.unchanged}`);
   return lines.join("\n");
 }
 
@@ -86,13 +151,13 @@ program
 
 program
   .command("verify")
-  .description("Verify the event log is untampered (hash chain)")
+  .description("Verify the event log and snapshots are untampered")
   .action(async () => {
     const r = await verifyProject(process.cwd());
     if (r.ok) {
-      console.log(`Integrity OK (${r.count} events)`);
+      console.log(`Integrity ${integrityLine(r)}`);
     } else {
-      console.error(`Integrity FAILED at event #${r.brokenAt}: ${r.reason}`);
+      console.error(integrityLine(r));
       process.exitCode = 2;
     }
   });
@@ -101,24 +166,26 @@ const session = program.command("session").description("Track which AI agent is 
 
 session
   .command("start")
-  .description("Start a session (a session left open is marked interrupted)")
+  .description("Start a session (a session left open is marked interrupted) and snapshot the repo")
   .requiredOption("--agent <name>", "agent name, e.g. claude, gpt, codex")
   .action(async (opts: { agent: string }) => {
-    const { session: s, interrupted } = await startSession(process.cwd(), opts.agent);
+    const { session: s, interrupted, snapshot } = await startSession(process.cwd(), opts.agent);
     if (interrupted) {
       console.log(`Previous session #${interrupted.id} (${safe(interrupted.agent)}) was never ended; marked interrupted.`);
     }
     console.log(`Started session #${s.id} (${safe(s.agent)})`);
+    console.log(formatSnapshotLine(snapshot, "Snapshot failed (recorded in the log); session started anyway."));
   });
 
 session
   .command("end")
-  .description("End the active session")
+  .description("End the active session and snapshot the repo")
   .option("--reason <reason>", "completed | limit | switched", "completed")
   .option("--note <text>", "short note, e.g. where you stopped")
   .action(async (opts: { reason: string; note?: string }) => {
     const s = await endSession(process.cwd(), opts);
     console.log(`Ended session #${s.id} (${safe(s.agent)}): ${s.end_reason}`);
+    console.log(formatSnapshotLine(s.snapshot, "Snapshot failed (recorded in the log)."));
   });
 
 session
@@ -139,6 +206,47 @@ session
     if (opts.json) console.log(JSON.stringify(list, null, 2));
     else if (list.length === 0) console.log("(no sessions)");
     else for (const s of list) console.log(formatSession(s));
+  });
+
+const snapshot = program.command("snapshot").description("Verified snapshots of the repo state");
+
+snapshot
+  .command("take", { isDefault: true })
+  .description("Record a snapshot now (git state + content hashes of changed files)")
+  .action(async () => {
+    const s = await takeSnapshot(process.cwd());
+    console.log(formatSnapshotLine(s, ""));
+  });
+
+snapshot
+  .command("list")
+  .description("List recent snapshots")
+  .option("--limit <n>", "how many", "20")
+  .option("--json", "output JSON")
+  .action(async (opts: { limit: string; json?: boolean }) => {
+    const list = await listSnapshots(process.cwd(), Number(opts.limit));
+    if (opts.json) console.log(JSON.stringify(list, null, 2));
+    else if (list.length === 0) console.log("(no snapshots)");
+    else {
+      for (const s of list) {
+        const sess = s.session_id === null ? "no session" : `session #${s.session_id}`;
+        console.log(`#${s.id} ${s.kind}  ${s.taken_at}  ${safe(s.branch)} @ ${short(s.head)}  ${s.fileCount} file(s)  ${sess}`);
+      }
+    }
+  });
+
+snapshot
+  .command("diff [from] [to]")
+  .description("Compare two snapshots (default: the last two) and show commits made in between")
+  .option("--session <id>", "compare the first and last snapshot of a session")
+  .option("--json", "output JSON")
+  .action(async (from: string | undefined, to: string | undefined, opts: { session?: string; json?: boolean }) => {
+    const c = await compareSnapshots(process.cwd(), {
+      from: from === undefined ? undefined : Number(from),
+      to: to === undefined ? undefined : Number(to),
+      session: opts.session === undefined ? undefined : Number(opts.session),
+    });
+    console.log(opts.json ? JSON.stringify(c, null, 2) : formatComparison(c));
   });
 
 const task = program.command("task").description("Track tasks (status changes are recorded as reported events)");

@@ -48,4 +48,23 @@ export const MIGRATIONS: readonly string[] = [
   );
   ALTER TABLE events ADD COLUMN session_id INTEGER;
   `,
+  // v4: snapshots of observed git state. Immutable; each one's digest is also
+  // stored in a hash-chained event, so editing a snapshot is detectable.
+  `
+  CREATE TABLE snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('manual', 'session_start', 'session_end')),
+    session_id INTEGER,
+    branch TEXT NOT NULL,
+    head TEXT,
+    files TEXT NOT NULL,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    digest TEXT NOT NULL
+  );
+  CREATE TRIGGER snapshots_no_update BEFORE UPDATE ON snapshots
+    BEGIN SELECT RAISE(ABORT, 'snapshots are immutable'); END;
+  CREATE TRIGGER snapshots_no_delete BEFORE DELETE ON snapshots
+    BEGIN SELECT RAISE(ABORT, 'snapshots are immutable'); END;
+  `,
 ];
