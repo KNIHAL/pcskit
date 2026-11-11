@@ -1,12 +1,17 @@
 import { Command } from "commander";
 import {
   addTask,
+  currentSession,
+  endSession,
   exitCodeFor,
   getStatus,
   initProject,
+  listSessions,
   listTasks,
+  startSession,
   updateTask,
   verifyProject,
+  type Session,
   type Status,
   type Task,
 } from "../core";
@@ -20,6 +25,11 @@ function formatTask(t: Task): string {
   return `#${t.id} [${t.status}] ${safe(t.title)}`;
 }
 
+function formatSession(s: Session): string {
+  const state = s.ended_at ? `ended ${s.ended_at} (${s.end_reason})` : "ACTIVE";
+  return `#${s.id} ${safe(s.agent)}  started ${s.started_at}  ${state}`;
+}
+
 function formatStatus(s: Status): string {
   const { project, git, integrity } = s;
   const lines = [
@@ -29,6 +39,9 @@ function formatStatus(s: Status): string {
     git.head
       ? `HEAD:    ${git.head.hash.slice(0, 7)} ${safe(git.head.subject)} (${git.head.date})`
       : "HEAD:    (no commits yet)",
+    s.session
+      ? `Session: #${s.session.id} ${safe(s.session.agent)} (since ${s.session.started_at})`
+      : "Session: (none active)",
     integrity.ok
       ? `Log:     OK (${integrity.count} events, hash chain verified)`
       : `Log:     INTEGRITY FAILURE at event #${integrity.brokenAt}: ${integrity.reason}`,
@@ -63,7 +76,7 @@ program
 
 program
   .command("status")
-  .description("Show the actual project state from git, plus open tasks")
+  .description("Show the actual project state from git, plus session and open tasks")
   .option("--json", "output JSON")
   .action(async (opts: { json?: boolean }) => {
     const s = await getStatus(process.cwd());
@@ -84,13 +97,57 @@ program
     }
   });
 
+const session = program.command("session").description("Track which AI agent is working");
+
+session
+  .command("start")
+  .description("Start a session (a session left open is marked interrupted)")
+  .requiredOption("--agent <name>", "agent name, e.g. claude, gpt, codex")
+  .action(async (opts: { agent: string }) => {
+    const { session: s, interrupted } = await startSession(process.cwd(), opts.agent);
+    if (interrupted) {
+      console.log(`Previous session #${interrupted.id} (${safe(interrupted.agent)}) was never ended; marked interrupted.`);
+    }
+    console.log(`Started session #${s.id} (${safe(s.agent)})`);
+  });
+
+session
+  .command("end")
+  .description("End the active session")
+  .option("--reason <reason>", "completed | limit | switched", "completed")
+  .option("--note <text>", "short note, e.g. where you stopped")
+  .action(async (opts: { reason: string; note?: string }) => {
+    const s = await endSession(process.cwd(), opts);
+    console.log(`Ended session #${s.id} (${safe(s.agent)}): ${s.end_reason}`);
+  });
+
+session
+  .command("current")
+  .description("Show the active session")
+  .action(async () => {
+    const s = await currentSession(process.cwd());
+    console.log(s ? formatSession(s) : "(no active session)");
+  });
+
+session
+  .command("list")
+  .description("List recent sessions")
+  .option("--limit <n>", "how many", "20")
+  .option("--json", "output JSON")
+  .action(async (opts: { limit: string; json?: boolean }) => {
+    const list = await listSessions(process.cwd(), Number(opts.limit));
+    if (opts.json) console.log(JSON.stringify(list, null, 2));
+    else if (list.length === 0) console.log("(no sessions)");
+    else for (const s of list) console.log(formatSession(s));
+  });
+
 const task = program.command("task").description("Track tasks (status changes are recorded as reported events)");
 
 task
   .command("add <title...>")
   .description("Add a task")
-  .option("--agent <name>", "who is reporting this", "user")
-  .action(async (title: string[], opts: { agent: string }) => {
+  .option("--agent <name>", "who is reporting this (default: active session's agent, else user)")
+  .action(async (title: string[], opts: { agent?: string }) => {
     const t = await addTask(process.cwd(), title.join(" "), opts.agent);
     console.log(`Added ${formatTask(t)}`);
   });
@@ -112,8 +169,8 @@ task
   .description("Change a task's status")
   .requiredOption("--status <status>", "todo | in_progress | done | blocked")
   .option("--note <text>", "short note about the change")
-  .option("--agent <name>", "who is reporting this", "user")
-  .action(async (id: string, opts: { status: string; note?: string; agent: string }) => {
+  .option("--agent <name>", "who is reporting this (default: active session's agent, else user)")
+  .action(async (id: string, opts: { status: string; note?: string; agent?: string }) => {
     const t = await updateTask(process.cwd(), Number(id), {
       status: opts.status,
       note: opts.note,

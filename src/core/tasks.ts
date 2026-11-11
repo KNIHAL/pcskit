@@ -3,6 +3,7 @@ import { inTransaction, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent } from "./events";
 import { redactText } from "./redact";
+import { activeSession, validateAgentName } from "./sessions";
 
 export const TASK_STATUSES = ["todo", "in_progress", "done", "blocked"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -28,20 +29,31 @@ export function openTasks(db: Db): Task[] {
   return db.prepare(`${SELECT} WHERE status != 'done' ORDER BY id ASC`).all() as unknown as Task[];
 }
 
-export async function addTask(cwd: string, title: string, source = "user"): Promise<Task> {
+/**
+ * Who is making the claim: an explicit agent name, else the agent of the active
+ * session, else "user". Either way it is a claim (`reported`), never an observation.
+ */
+function resolveSource(db: Db, explicit: string | undefined): { source: string; sessionId?: number } {
+  const session = activeSession(db);
+  const source = explicit !== undefined ? validateAgentName(explicit) : (session?.agent ?? "user");
+  return session ? { source, sessionId: session.id } : { source };
+}
+
+export async function addTask(cwd: string, title: string, source?: string): Promise<Task> {
   const clean = redactText(title.trim()).text;
   if (!clean) throw new PcsError("INVALID_INPUT", "Task title is empty.");
   if (clean.length > MAX_TITLE) throw new PcsError("INVALID_INPUT", `Task title is longer than ${MAX_TITLE} characters.`);
 
   return withDb(cwd, (db) =>
     inTransaction(db, () => {
+      const who = resolveSource(db, source);
       const now = new Date().toISOString();
       const info = db
         .prepare("INSERT INTO tasks (title, status, created_at, updated_at) VALUES (?, 'todo', ?, ?)")
         .run(clean, now, now);
       const id = Number(info.lastInsertRowid);
       // A task declared by a person or agent is a claim about intent, not an observed fact.
-      insertEvent(db, { type: "task.created", provenance: "reported", source, payload: { taskId: id, title: clean } });
+      insertEvent(db, { type: "task.created", provenance: "reported", ...who, payload: { taskId: id, title: clean } });
       return { id, title: clean, status: "todo" as const, created_at: now, updated_at: now };
     }),
   );
@@ -63,13 +75,14 @@ export async function updateTask(
     inTransaction(db, () => {
       const current = db.prepare(`${SELECT} WHERE id = ?`).get(id) as Task | undefined;
       if (!current) throw new PcsError("INVALID_INPUT", `Task #${id} not found.`);
+      const who = resolveSource(db, change.source);
       const now = new Date().toISOString();
       db.prepare("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?").run(status, now, id);
       // "done" from an agent is a claim; PCS only upgrades it to verified with real evidence (tests, git).
       insertEvent(db, {
         type: "task.status_changed",
         provenance: "reported",
-        source: change.source ?? "user",
+        ...who,
         payload: { taskId: id, from: current.status, to: status, ...(note ? { note } : {}) },
       });
       return { ...current, status, updated_at: now };

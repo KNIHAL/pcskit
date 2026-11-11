@@ -5,5 +5,6 @@ export * from "./migrations";
 export * from "./db";
 export * from "./context";
 export * from "./events";
+export * from "./sessions";
 export * from "./tasks";
 export * from "./project";

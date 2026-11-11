@@ -15,6 +15,8 @@ export interface EventInput {
   provenance: Provenance;
   source: string;
   payload?: unknown;
+  /** Agent session this event belongs to, if any. */
+  sessionId?: number;
 }
 
 export interface EventRow {
@@ -24,6 +26,7 @@ export interface EventRow {
   provenance: Provenance;
   source: string;
   payload: string;
+  session_id: number | null;
   prev_hash: string;
   hash: string;
 }
@@ -36,6 +39,8 @@ export interface ChainReport {
 }
 
 export const GENESIS_HASH = "0".repeat(64);
+
+const COLUMNS = "id, ts, type, provenance, source, payload, session_id, prev_hash, hash";
 
 export function canonicalJson(value: unknown): string {
   const sort = (v: unknown): unknown => {
@@ -52,13 +57,14 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(sort(value));
 }
 
+/** session_id joins the hashed content only when set, keeping pre-v3 chains valid. */
 export function computeHash(
   prevHash: string,
-  e: Pick<EventRow, "ts" | "type" | "provenance" | "source" | "payload">,
+  e: Pick<EventRow, "ts" | "type" | "provenance" | "source" | "payload"> & { session_id?: number | null },
 ): string {
-  return createHash("sha256")
-    .update(JSON.stringify([prevHash, e.ts, e.type, e.provenance, e.source, e.payload]))
-    .digest("hex");
+  const parts: unknown[] = [prevHash, e.ts, e.type, e.provenance, e.source, e.payload];
+  if (e.session_id !== undefined && e.session_id !== null) parts.push(e.session_id);
+  return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 }
 
 /** Insert one event. Must be called inside a transaction (see appendEvent). */
@@ -67,20 +73,21 @@ export function insertEvent(db: Db, input: EventInput): EventRow {
     | { hash: string }
     | undefined;
   const prev_hash = last?.hash ?? GENESIS_HASH;
-  const payload = canonicalJson(redactDeep(input.payload ?? {}).value);
+  const session_id = input.sessionId ?? null;
   const body = {
     ts: new Date().toISOString(),
     type: input.type,
     provenance: input.provenance,
     source: input.source,
-    payload,
+    payload: canonicalJson(redactDeep(input.payload ?? {}).value),
+    session_id,
   };
   const hash = computeHash(prev_hash, body);
   const info = db
     .prepare(
-      "INSERT INTO events (ts, type, provenance, source, payload, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO events (ts, type, provenance, source, payload, session_id, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .run(body.ts, body.type, body.provenance, body.source, body.payload, prev_hash, hash);
+    .run(body.ts, body.type, body.provenance, body.source, body.payload, session_id, prev_hash, hash);
   return { id: Number(info.lastInsertRowid), ...body, prev_hash, hash };
 }
 
@@ -90,7 +97,7 @@ export function appendEvent(db: Db, input: EventInput): EventRow {
 
 export function recentEvents(db: Db, limit = 5): EventRow[] {
   return db
-    .prepare("SELECT id, ts, type, provenance, source, payload, prev_hash, hash FROM events ORDER BY id DESC LIMIT ?")
+    .prepare(`SELECT ${COLUMNS} FROM events ORDER BY id DESC LIMIT ?`)
     .all(limit) as unknown as EventRow[];
 }
 
@@ -98,9 +105,7 @@ export function recentEvents(db: Db, limit = 5): EventRow[] {
 export function verifyChain(db: Db): ChainReport {
   let expectedPrev = GENESIS_HASH;
   let count = 0;
-  const rows = db.prepare(
-    "SELECT id, ts, type, provenance, source, payload, prev_hash, hash FROM events ORDER BY id ASC",
-  );
+  const rows = db.prepare(`SELECT ${COLUMNS} FROM events ORDER BY id ASC`);
   for (const raw of rows.iterate()) {
     const row = raw as unknown as EventRow;
     count++;

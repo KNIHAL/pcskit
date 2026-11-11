@@ -36,4 +36,16 @@ export const MIGRATIONS: readonly string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // v3: agent sessions. events.session_id is part of the hash only when set,
+  // so chains written before this migration still verify.
+  `
+  CREATE TABLE sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    end_reason TEXT CHECK (end_reason IN ('completed', 'limit', 'switched', 'interrupted'))
+  );
+  ALTER TABLE events ADD COLUMN session_id INTEGER;
+  `,
 ];

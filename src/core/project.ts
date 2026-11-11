@@ -5,6 +5,7 @@ import { inTransaction, openDb, PCS_DIR, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent, recentEvents, verifyChain, type ChainReport, type EventRow } from "./events";
 import { findGitRoot, getGitState, type GitState } from "./git";
+import { activeSession, type Session } from "./sessions";
 import { openTasks, type Task } from "./tasks";
 
 export interface ProjectInfo {
@@ -16,6 +17,7 @@ export interface ProjectInfo {
 export interface Status {
   project: ProjectInfo;
   git: Extract<GitState, { isRepo: true }>;
+  session: Session | null;
   openTasks: Task[];
   recentEvents: EventRow[];
   integrity: ChainReport;
@@ -90,6 +92,7 @@ export async function getStatus(cwd: string): Promise<Status> {
     return {
       project,
       git,
+      session: activeSession(db),
       openTasks: openTasks(db),
       recentEvents: recentEvents(db, 5),
       integrity: verifyChain(db),

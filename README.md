@@ -20,13 +20,16 @@ node dist/cli.js --help
 | Command | What it does |
 | --- | --- |
 | `pcs init` | Register the current git repo (creates git-excluded `.pcs/`) |
-| `pcs status [--json]` | Real git state, open tasks, log integrity |
+| `pcs status [--json]` | Real git state, active session, open tasks, log integrity |
 | `pcs verify` | Verify the tamper-evident event log (exit 2 if broken) |
+| `pcs session start --agent <name>` | Start a session (an unended one is marked interrupted) |
+| `pcs session end [--reason r] [--note t]` | End it (`completed`, `limit`, `switched`) |
+| `pcs session current` / `pcs session list` | Show active / recent sessions |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
 
 ## Layout
-- `src/core`: all logic (git adapter, SQLite store, events, tasks, redaction)
+- `src/core`: all logic (git adapter, SQLite store, events, sessions, tasks, redaction)
 - `src/cli`: argument parsing and output only
 - `tests`: vitest suites
