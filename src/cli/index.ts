@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import {
+  addNote,
   addTask,
+  createHandoff,
+  listNotes,
+  resolveNote,
   getTaskEvidence,
   getTestRun,
   linkEvidence,
@@ -25,6 +29,7 @@ import {
   type SnapshotComparison,
   type SnapshotFile,
   type Status,
+  type Note,
   type Task,
   type TestRun,
 } from "../core";
@@ -387,6 +392,76 @@ evidence
   .action(async (task: string, run: string, opts: { agent?: string }) => {
     await linkEvidence(process.cwd(), Number(task), Number(run), opts.agent);
     console.log(`Linked run #${Number(run)} to task #${Number(task)}`);
+  });
+
+function formatNote(n: Note): string {
+  const state = n.resolved_at ? `  (resolved by ${safe(n.resolved_by ?? "?")} ${n.resolved_at})` : "";
+  return `#${n.id} [${n.kind}] ${safe(n.source)}: ${safe(n.text)}${state}`;
+}
+
+const note = program
+  .command("note")
+  .description("Record what the next agent must know (stored as reported claims in the event log)");
+
+note
+  .command("add <kind> <text...>")
+  .description("kind: task (what we are building) | next (an exact next step) | avoid (do not touch, and why) | issue (known problem)")
+  .option("--agent <name>", "who is reporting this (default: active session's agent, else user)")
+  .action(async (kind: string, text: string[], opts: { agent?: string }) => {
+    const n = await addNote(process.cwd(), kind, text.join(" "), opts.agent);
+    console.log(`Added ${formatNote(n)}`);
+  });
+
+note
+  .command("list")
+  .description("List notes (unresolved by default)")
+  .option("--kind <kind>", "task | next | avoid | issue")
+  .option("--all", "include resolved notes")
+  .option("--json", "output JSON")
+  .action(async (opts: { kind?: string; all?: boolean; json?: boolean }) => {
+    const list = await listNotes(process.cwd(), {
+      ...(opts.kind !== undefined ? { kind: opts.kind } : {}),
+      ...(opts.all ? { all: true } : {}),
+    });
+    if (opts.json) console.log(JSON.stringify(list, null, 2));
+    else if (list.length === 0) console.log("(no notes)");
+    else for (const n of list) console.log(formatNote(n));
+  });
+
+note
+  .command("resolve <id>")
+  .description("Mark a next/avoid/issue note as no longer applicable")
+  .option("--agent <name>", "who is resolving it (default: active session's agent, else user)")
+  .action(async (id: string, opts: { agent?: string }) => {
+    const n = await resolveNote(process.cwd(), Number(id), opts.agent);
+    console.log(`Resolved ${formatNote(n)}`);
+  });
+
+program
+  .command("handoff")
+  .description("Write a handoff for the next agent (.pcs/HANDOFF.md): verified, reported and inferred facts kept apart")
+  .option("--session <id>", "whose work to hand off (default: the latest session)")
+  .option("--out <file>", "write here instead of .pcs/HANDOFF.md")
+  .option("--stdout", "print the handoff instead of writing a file")
+  .option("--json", "print the structured handoff as JSON instead of writing a file")
+  .action(async (opts: { session?: string; out?: string; stdout?: boolean; json?: boolean }) => {
+    const toTerminal = opts.stdout === true || opts.json === true;
+    const { handoff, markdown, path } = await createHandoff(process.cwd(), {
+      ...(opts.session !== undefined ? { session: Number(opts.session) } : {}),
+      ...(opts.out !== undefined ? { out: opts.out } : {}),
+      noFile: toTerminal,
+    });
+    if (opts.json) console.log(JSON.stringify(handoff, null, 2));
+    else if (opts.stdout) console.log(safeText(markdown));
+    else {
+      console.log(`Handoff written to ${safe(path ?? "")} (${Buffer.byteLength(markdown)} bytes)`);
+      console.log(
+        `Completed: ${handoff.tasks.verified.length} verified, ${handoff.tasks.reportedOnly.length + handoff.tasks.stale.length} not verified. In progress: ${handoff.tasks.inProgress.length}. Unresolved issues: ${handoff.issues.length}.`,
+      );
+      if (!handoff.originalTask) console.log('Tip: record the original task with `pcs note add task "..."`.');
+      if (handoff.nextSteps.length === 0) console.log('Tip: record exact next steps with `pcs note add next "..."`.');
+    }
+    if (!handoff.integrity.ok) process.exitCode = 2;
   });
 
 program.parseAsync().catch((err: unknown) => {

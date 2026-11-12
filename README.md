@@ -30,6 +30,8 @@ node dist/cli.js --help
 | `pcs snapshot diff [from] [to] [--session id]` | What changed between snapshots, plus commits made in between |
 | `pcs test [--task id] [--timeout s] -- <command>` | Run a command and record the result as verified evidence (optionally linked to a task) |
 | `pcs evidence list` / `show <id>` / `link <task> <run>` | Browse test runs; point a task at a run |
+| `pcs note add <kind> <text>` / `list` / `resolve <id>` | Record the original task (`task`), exact next steps (`next`), do-not-touch (`avoid`) and known problems (`issue`) |
+| `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |

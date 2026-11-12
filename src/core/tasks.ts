@@ -33,7 +33,7 @@ export function openTasks(db: Db): Task[] {
  * Who is making the claim: an explicit agent name, else the agent of the active
  * session, else "user". Either way it is a claim (`reported`), never an observation.
  */
-function resolveSource(db: Db, explicit: string | undefined): { source: string; sessionId?: number } {
+export function resolveSource(db: Db, explicit: string | undefined): { source: string; sessionId?: number } {
   const session = activeSession(db);
   const source = explicit !== undefined ? validateAgentName(explicit) : (session?.agent ?? "user");
   return session ? { source, sessionId: session.id } : { source };

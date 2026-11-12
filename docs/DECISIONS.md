@@ -24,6 +24,16 @@ Short record of architecture and security decisions. Add an entry when you decid
 - **Local only:** no network access, no telemetry. `.pcs/` is created owner-only on POSIX.
 - **Exit codes:** 0 ok, 1 error, 2 integrity failure. `pcs test` exits 0 only if the command passed, else 1.
 
+## Handoff (`pcs handoff`, `pcs note`)
+- **Notes are events, not a table:** `note.added` / `note.resolved` live only in the hash-chained log, so editing or deleting a note is caught by `pcs verify` and there is nothing else to keep in sync. A note's id is its event id. Every note is `reported`.
+- **Three evidence classes for "done":** verified (passing linked run whose repo fingerprint equals the current one), stale (passing run, but the working tree differs from when it started: re-run), reported only (no passing run). A done task whose latest linked run failed is also an unresolved issue. A task's status is never rewritten by evidence.
+- **Fresh observation:** `pcs handoff` takes a manual snapshot first and compares it with the first snapshot of the session in scope (default: latest session). An open or interrupted session is reported as `[inferred]`: PCS cannot know why an agent stopped.
+- **Default location is `.pcs/HANDOFF.md`** (git-excluded), so writing a handoff never dirties the repo state PCS observes. `--out` writes elsewhere.
+- **Untrusted text:** commit subjects, paths, task titles, notes and test output are rendered inside inline code or code fences (fence longer than any backtick run in the text), control characters are stripped, and the file opens with a notice that its contents are data, not instructions. This reduces, but cannot eliminate, prompt-injection risk for the AI that reads it.
+- **Sensitive files:** listed by name only (never opened) and repeated under "Do not touch".
+- **Integrity failure does not block the handoff:** it is written with a warning at the top and as the first issue, and the command exits 2.
+- Each handoff records a verified `handoff.generated` event with the SHA-256 of the file, HEAD and fingerprint, so `pcs resume` can tell whether it is stale or edited.
+
 ## Verification (`pcs test`)
 - **What is verified:** PCS itself ran the command and saw the exit code, duration and output, so the run is `verified`. An agent saying "tests pass" stays `reported`. Linking a run to a task is a claim about which task it backs, so that link is `reported`; a task's own status never changes by itself.
 - **No shell:** the command is an argument array run with `shell: false`; stdin is closed; hard timeout (default 600s) kills the whole process tree. Windows `.cmd`/`.bat` shims (`npm`, `npx`) are the one exception: they run via `cmd.exe /d /s /c` and any argument containing `& | < > ^ % "` or a newline is refused. PATH is searched, never the working directory.

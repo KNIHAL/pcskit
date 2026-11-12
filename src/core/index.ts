@@ -11,4 +11,6 @@ export * from "./sessions";
 export * from "./tasks";
 export * from "./runner";
 export * from "./testruns";
+export * from "./notes";
+export * from "./handoff";
 export * from "./project";

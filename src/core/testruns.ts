@@ -54,6 +54,8 @@ export interface EvidenceSummary {
   outcome: RunOutcome;
   ts: string;
   head: string | null;
+  /** Repo state the run started from (compare with the current fingerprint to see if it is stale). */
+  tree_fingerprint: string | null;
 }
 
 interface TestRunRow {
@@ -346,12 +348,31 @@ export function latestEvidenceByTask(db: Db): Map<number, EvidenceSummary> {
   const out = new Map<number, EvidenceSummary>();
   const rows = db
     .prepare(
-      `SELECT e.task_id AS task_id, r.id AS run_id, r.outcome AS outcome, r.ts AS ts, r.head AS head
+      `SELECT e.task_id AS task_id, r.id AS run_id, r.outcome AS outcome, r.ts AS ts, r.head AS head,
+              r.tree_fingerprint AS tree_fingerprint
        FROM task_evidence e JOIN test_runs r ON r.id = e.run_id ORDER BY r.id ASC`,
     )
     .all() as unknown as ({ task_id: number } & EvidenceSummary)[];
-  for (const r of rows) out.set(r.task_id, { run_id: r.run_id, outcome: r.outcome, ts: r.ts, head: r.head });
+  for (const r of rows) {
+    out.set(r.task_id, {
+      run_id: r.run_id,
+      outcome: r.outcome,
+      ts: r.ts,
+      head: r.head,
+      tree_fingerprint: r.tree_fingerprint,
+    });
+  }
   return out;
+}
+
+/** Runs newest first, optionally only those started at or after `since` (ISO timestamp). */
+export function recentTestRuns(db: Db, opts: { since?: string; limit?: number } = {}): TestRun[] {
+  const limit = opts.limit ?? 50;
+  const rows =
+    opts.since !== undefined
+      ? db.prepare(`SELECT ${COLUMNS} FROM test_runs WHERE ts >= ? ORDER BY id DESC LIMIT ?`).all(opts.since, limit)
+      : db.prepare(`SELECT ${COLUMNS} FROM test_runs ORDER BY id DESC LIMIT ?`).all(limit);
+  return (rows as unknown as TestRunRow[]).map(toRun);
 }
 
 export async function getTaskEvidence(cwd: string): Promise<Record<number, EvidenceSummary>> {
