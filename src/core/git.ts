@@ -125,6 +125,12 @@ export async function getGitState(cwd: string): Promise<GitState> {
   return { isRepo: true, root, branch, head, changed };
 }
 
+/** Directory of `cwd` relative to the repository root, with "/" separators ("" at the root). */
+export async function relativeToRoot(cwd: string): Promise<string> {
+  const out = (await git(cwd, ["rev-parse", "--show-prefix"])).trim();
+  return out.replace(/\/+$/, "");
+}
+
 function assertHash(h: string): void {
   if (!HASH_RE.test(h)) throw new PcsError("INVALID_INPUT", "Invalid commit hash.");
 }

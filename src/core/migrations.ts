@@ -67,4 +67,40 @@ export const MIGRATIONS: readonly string[] = [
   CREATE TRIGGER snapshots_no_delete BEFORE DELETE ON snapshots
     BEGIN SELECT RAISE(ABORT, 'snapshots are immutable'); END;
   `,
+  // v5: verified test runs and links from tasks to them. Runs are immutable; each run's
+  // digest (and each link) is also stored in a hash-chained event, so tampering is detectable.
+  `
+  CREATE TABLE test_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    session_id INTEGER,
+    argv TEXT NOT NULL,
+    cwd TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('passed', 'failed', 'timeout', 'error')),
+    exit_code INTEGER,
+    signal TEXT,
+    duration_ms INTEGER NOT NULL,
+    output TEXT NOT NULL,
+    output_bytes INTEGER NOT NULL,
+    output_truncated INTEGER NOT NULL DEFAULT 0,
+    head TEXT,
+    tree_fingerprint TEXT,
+    digest TEXT NOT NULL
+  );
+  CREATE TRIGGER test_runs_no_update BEFORE UPDATE ON test_runs
+    BEGIN SELECT RAISE(ABORT, 'test runs are immutable'); END;
+  CREATE TRIGGER test_runs_no_delete BEFORE DELETE ON test_runs
+    BEGIN SELECT RAISE(ABORT, 'test runs are immutable'); END;
+  CREATE TABLE task_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    run_id INTEGER NOT NULL,
+    ts TEXT NOT NULL,
+    UNIQUE (task_id, run_id)
+  );
+  CREATE TRIGGER task_evidence_no_update BEFORE UPDATE ON task_evidence
+    BEGIN SELECT RAISE(ABORT, 'task evidence is immutable'); END;
+  CREATE TRIGGER task_evidence_no_delete BEFORE DELETE ON task_evidence
+    BEGIN SELECT RAISE(ABORT, 'task evidence is immutable'); END;
+  `,
 ];

@@ -9,4 +9,6 @@ export * from "./snapshots";
 export * from "./integrity";
 export * from "./sessions";
 export * from "./tasks";
+export * from "./runner";
+export * from "./testruns";
 export * from "./project";

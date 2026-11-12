@@ -1,6 +1,11 @@
 import { Command } from "commander";
 import {
   addTask,
+  getTaskEvidence,
+  getTestRun,
+  linkEvidence,
+  listTestRuns,
+  runTest,
   compareSnapshots,
   currentSession,
   endSession,
@@ -21,6 +26,7 @@ import {
   type SnapshotFile,
   type Status,
   type Task,
+  type TestRun,
 } from "../core";
 
 /** Repo-controlled strings (paths, commit subjects, titles) can carry terminal escape sequences. */
@@ -267,9 +273,15 @@ task
   .option("--json", "output JSON")
   .action(async (opts: { status?: string; json?: boolean }) => {
     const tasks = await listTasks(process.cwd(), opts.status);
+    const evidence = await getTaskEvidence(process.cwd());
     if (opts.json) console.log(JSON.stringify(tasks, null, 2));
     else if (tasks.length === 0) console.log("(no tasks)");
-    else for (const t of tasks) console.log(formatTask(t));
+    else {
+      for (const t of tasks) {
+        const e = evidence[t.id];
+        console.log(formatTask(t) + (e ? `  [evidence: run #${e.run_id} ${e.outcome}]` : ""));
+      }
+    }
   });
 
 task
@@ -285,6 +297,96 @@ task
       source: opts.agent,
     });
     console.log(`Updated ${formatTask(t)}`);
+  });
+
+/** Multi-line text from storage: keep newlines and tabs, drop everything else a terminal could act on. */
+function safeText(s: string): string {
+  return s.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "?");
+}
+
+function formatCommand(argv: string[]): string {
+  return safe(argv.map((a) => (a === "" || /[\s"']/.test(a) ? JSON.stringify(a) : a)).join(" "));
+}
+
+function describeExit(r: TestRun): string {
+  if (r.outcome === "timeout") return "timed out";
+  if (r.exit_code !== null) return `exit ${r.exit_code}`;
+  return r.signal ? `signal ${safe(r.signal)}` : "no exit code";
+}
+
+program
+  .command("test")
+  .description("Run a command and record its result as verified evidence (put the command after --)")
+  .argument("<command...>", "command and arguments, e.g. -- npm test")
+  .option("--task <id>", "link this run to a task as evidence")
+  .option("--timeout <seconds>", "kill the command after this long", "600")
+  .option("--agent <name>", "who links the evidence (default: active session's agent, else user)")
+  .action(async (command: string[], opts: { task?: string; timeout: string; agent?: string }) => {
+    const { run: r, linkedTask } = await runTest(process.cwd(), command, {
+      ...(opts.task !== undefined ? { taskId: Number(opts.task) } : {}),
+      ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
+      timeoutMs: Math.round(Number(opts.timeout) * 1000),
+      onOutput: (text, stream) => {
+        (stream === "stderr" ? process.stderr : process.stdout).write(text);
+      },
+    });
+    console.log(
+      `\nRun #${r.id} ${r.outcome.toUpperCase()} (${describeExit(r)}, ${(r.duration_ms / 1000).toFixed(1)}s): recorded as verified evidence`,
+    );
+    console.log(
+      `Repo state: HEAD ${short(r.head)}, fingerprint ${r.tree_fingerprint ? r.tree_fingerprint.slice(0, 12) : "(not observed)"}`,
+    );
+    if (r.output_truncated) console.log("Note: only the last part of the output was stored.");
+    if (linkedTask !== null) console.log(`Linked to task #${linkedTask}`);
+    if (r.outcome !== "passed") process.exitCode = 1;
+  });
+
+const evidence = program.command("evidence").description("Verified test runs and the tasks they back");
+
+evidence
+  .command("list")
+  .description("List recent test runs")
+  .option("--limit <n>", "how many", "20")
+  .option("--json", "output JSON")
+  .action(async (opts: { limit: string; json?: boolean }) => {
+    const list = await listTestRuns(process.cwd(), Number(opts.limit));
+    if (opts.json) console.log(JSON.stringify(list, null, 2));
+    else if (list.length === 0) console.log("(no test runs)");
+    else {
+      for (const r of list) {
+        const sess = r.session_id === null ? "no session" : `session #${r.session_id}`;
+        const code = r.exit_code === null ? "-" : String(r.exit_code);
+        console.log(
+          `#${r.id} ${r.outcome.padEnd(7)} exit ${code}  ${(r.duration_ms / 1000).toFixed(1)}s  ${r.ts}  @ ${short(r.head)}  ${sess}  ${formatCommand(r.argv)}`,
+        );
+      }
+    }
+  });
+
+evidence
+  .command("show <id>")
+  .description("Show one test run with its stored output")
+  .option("--json", "output JSON")
+  .action(async (id: string, opts: { json?: boolean }) => {
+    const r = await getTestRun(process.cwd(), Number(id));
+    if (opts.json) {
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    console.log(`Run #${r.id}: ${r.outcome.toUpperCase()} (${describeExit(r)}, ${(r.duration_ms / 1000).toFixed(1)}s)  [verified: PCS ran it]`);
+    console.log(`Command: ${formatCommand(r.argv)}${r.cwd ? `  (in ${safe(r.cwd)})` : ""}`);
+    console.log(`Started: ${r.ts}  HEAD ${short(r.head)}  fingerprint ${r.tree_fingerprint ? r.tree_fingerprint.slice(0, 12) : "(not observed)"}`);
+    console.log(`Output (${r.output_truncated ? "last part of " : ""}${r.output_bytes} bytes, redacted):`);
+    console.log(safeText(r.output));
+  });
+
+evidence
+  .command("link <task> <run>")
+  .description("Point a task at a test run as evidence")
+  .option("--agent <name>", "who is linking (default: active session's agent, else user)")
+  .action(async (task: string, run: string, opts: { agent?: string }) => {
+    await linkEvidence(process.cwd(), Number(task), Number(run), opts.agent);
+    console.log(`Linked run #${Number(run)} to task #${Number(task)}`);
   });
 
 program.parseAsync().catch((err: unknown) => {

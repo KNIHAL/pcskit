@@ -22,4 +22,12 @@ Short record of architecture and security decisions. Add an entry when you decid
 - **Terminal safety:** repo-controlled strings are stripped of control characters before printing.
 - **Input validation:** agent names are restricted to a safe character set; titles, notes and limits are length-capped.
 - **Local only:** no network access, no telemetry. `.pcs/` is created owner-only on POSIX.
-- **Exit codes:** 0 ok, 1 error, 2 integrity failure.
+- **Exit codes:** 0 ok, 1 error, 2 integrity failure. `pcs test` exits 0 only if the command passed, else 1.
+
+## Verification (`pcs test`)
+- **What is verified:** PCS itself ran the command and saw the exit code, duration and output, so the run is `verified`. An agent saying "tests pass" stays `reported`. Linking a run to a task is a claim about which task it backs, so that link is `reported`; a task's own status never changes by itself.
+- **No shell:** the command is an argument array run with `shell: false`; stdin is closed; hard timeout (default 600s) kills the whole process tree. Windows `.cmd`/`.bat` shims (`npm`, `npx`) are the one exception: they run via `cmd.exe /d /s /c` and any argument containing `& | < > ^ % "` or a newline is refused. PATH is searched, never the working directory.
+- **Stored output:** only the last 8 KiB, sanitized (escape sequences and control characters stripped) and redacted (arguments too). Redaction is best-effort: a secret passed as a separate argument (`--token abc`) is not recognized.
+- **Evidence integrity:** runs and task links are immutable (triggers); each run's digest and each link is in a hash-chained event; `pcs verify` catches edited, deleted or forged evidence. Not covered: same limits as the event log (truncation of the newest events, full rewrite with a recomputed chain).
+- **Repo state:** before running, PCS records HEAD and a fingerprint of the changed files' content hashes, so a later reader can tell whether a passing run still describes the current code. Observation failing does not block the run (fingerprint is null).
+- **DB lock:** the repo is observed and the command run before the DB is opened; a long test run never holds a lock.

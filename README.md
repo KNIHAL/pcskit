@@ -28,6 +28,8 @@ node dist/cli.js --help
 | `pcs snapshot` | Record a verified snapshot now (git state + content hashes) |
 | `pcs snapshot list` | List snapshots |
 | `pcs snapshot diff [from] [to] [--session id]` | What changed between snapshots, plus commits made in between |
+| `pcs test [--task id] [--timeout s] -- <command>` | Run a command and record the result as verified evidence (optionally linked to a task) |
+| `pcs evidence list` / `show <id>` / `link <task> <run>` | Browse test runs; point a task at a run |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
