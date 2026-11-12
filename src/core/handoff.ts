@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, pcsDir, type Db } from "./db";
 import { PcsError } from "./errors";
@@ -8,6 +8,7 @@ import { insertEvent, type ChainReport } from "./events";
 import type { CommitInfo, CommittedFile } from "./git";
 import { verifyIntegrity } from "./integrity";
 import { readNotes, type Note } from "./notes";
+import { cap, code, fenced, oneLine, secs, short, tag, type Tag } from "./markdown";
 import { isSensitivePath } from "./redact";
 import type { RunOutcome } from "./runner";
 import { activeSession, type Session } from "./sessions";
@@ -25,7 +26,7 @@ const MAX_FAILURE_OUTPUT = 1500;
 const MAX_FAILURES_SHOWN = 2;
 const MAX_NOTE_SHOWN = 1000;
 
-export type Tag = "verified" | "reported" | "inferred";
+export type { Tag };
 
 export interface TaskView {
   id: number;
@@ -361,52 +362,6 @@ export async function buildHandoff(cwd: string, opts: { session?: number | undef
 // are stripped. The file says at the top that its contents are data, not instructions.
 // ---------------------------------------------------------------------------------------
 
-function oneLine(s: string, max = 300): string {
-  const t = s.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
-}
-
-function longestRun(s: string, ch: string): number {
-  let best = 0;
-  let cur = 0;
-  for (const c of s) {
-    cur = c === ch ? cur + 1 : 0;
-    if (cur > best) best = cur;
-  }
-  return best;
-}
-
-function code(s: string, max = 300): string {
-  const t = oneLine(s, max);
-  const fence = "`".repeat(longestRun(t, "`") + 1);
-  const pad = t.startsWith("`") || t.endsWith("`") ? " " : "";
-  return `${fence}${pad}${t}${pad}${fence}`;
-}
-
-function fenced(text: string): string {
-  const clean = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "?").trimEnd();
-  const fence = "`".repeat(Math.max(3, longestRun(clean, "`") + 1));
-  return `${fence}\n${clean}\n${fence}`;
-}
-
-function tag(p: Tag, source?: string): string {
-  if (p === "verified") return "[verified]";
-  if (p === "inferred") return "[inferred]";
-  return `[reported by ${oneLine(source ?? "unknown", 64)}]`;
-}
-
-function short(hash: string | null): string {
-  return hash ? hash.slice(0, 7) : "(none)";
-}
-
-function cap<T>(items: T[], n: number): { shown: T[]; more: number } {
-  return { shown: items.slice(0, n), more: Math.max(0, items.length - n) };
-}
-
-function secs(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
 function describeRun(r: RunView): string {
   const exit = r.outcome === "timeout" ? "timed out" : r.exit_code !== null ? `exit ${r.exit_code}` : "no exit code";
   return `${r.outcome.toUpperCase()} (${exit}, ${secs(r.duration_ms)})`;
@@ -586,6 +541,12 @@ export function renderHandoff(h: Handoff): string {
 
 // ---------------------------------------------------------------------------------------
 
+/** Path as recorded in the log: relative to the repo root with "/" when inside it, absolute otherwise. */
+function recordedPath(root: string, target: string): string {
+  const rel = relative(resolve(root), target);
+  return rel === "" || rel.startsWith("..") || isAbsolute(rel) ? target : rel.split(sep).join("/");
+}
+
 export interface CreateHandoffOptions {
   session?: number | undefined;
   /** Write here instead of .pcs/HANDOFF.md. */
@@ -637,7 +598,7 @@ export async function createHandoff(cwd: string, opts: CreateHandoffOptions = {}
         source: "pcs",
         ...(sessionId !== undefined ? { sessionId } : {}),
         payload: {
-          path: target === null ? null : opts.out !== undefined ? opts.out : `.pcs/${HANDOFF_FILE}`,
+          path: target === null ? null : recordedPath(root, target),
           sha256: createHash("sha256").update(markdown).digest("hex"),
           bytes: Buffer.byteLength(markdown),
           scopeSession: handoff.session?.id ?? null,

@@ -13,4 +13,5 @@ export * from "./runner";
 export * from "./testruns";
 export * from "./notes";
 export * from "./handoff";
+export * from "./resume";
 export * from "./project";

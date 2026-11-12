@@ -5,6 +5,7 @@ import {
   createHandoff,
   listNotes,
   resolveNote,
+  resume,
   getTaskEvidence,
   getTestRun,
   linkEvidence,
@@ -462,6 +463,18 @@ program
       if (handoff.nextSteps.length === 0) console.log('Tip: record exact next steps with `pcs note add next "..."`.');
     }
     if (!handoff.integrity.ok) process.exitCode = 2;
+  });
+
+program
+  .command("resume")
+  .description("Pick up the latest handoff: check it, snapshot the repo, print the brief and record the pickup")
+  .option("--agent <name>", "who is picking up; starts a session for them (default: the active session's agent)")
+  .option("--json", "output JSON")
+  .action(async (opts: { agent?: string; json?: boolean }) => {
+    const r = await resume(process.cwd(), opts.agent !== undefined ? { agent: opts.agent } : {});
+    if (opts.json) console.log(JSON.stringify(r, null, 2));
+    else console.log(safeText(r.brief));
+    if (!r.checks.integrity.ok) process.exitCode = 2;
   });
 
 program.parseAsync().catch((err: unknown) => {

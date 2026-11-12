@@ -32,6 +32,7 @@ node dist/cli.js --help
 | `pcs evidence list` / `show <id>` / `link <task> <run>` | Browse test runs; point a task at a run |
 | `pcs note add <kind> <text>` / `list` / `resolve <id>` | Record the original task (`task`), exact next steps (`next`), do-not-touch (`avoid`) and known problems (`issue`) |
 | `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
+| `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |

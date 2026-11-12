@@ -41,3 +41,11 @@ Short record of architecture and security decisions. Add an entry when you decid
 - **Evidence integrity:** runs and task links are immutable (triggers); each run's digest and each link is in a hash-chained event; `pcs verify` catches edited, deleted or forged evidence. Not covered: same limits as the event log (truncation of the newest events, full rewrite with a recomputed chain).
 - **Repo state:** before running, PCS records HEAD and a fingerprint of the changed files' content hashes, so a later reader can tell whether a passing run still describes the current code. Observation failing does not block the run (fingerprint is null).
 - **DB lock:** the repo is observed and the command run before the DB is opened; a long test run never holds a lock.
+
+## Resume (`pcs resume`)
+- The pickup is two events: `handoff.checked` (verified: PCS ran the checks) and `handoff.picked_up` (reported: the agent says it took over). Both are linked to the new session. Sources are never mixed.
+- A handoff file that was edited, deleted or never written is not shown. The handoff is rebuilt from the evidence log, because a file on disk is an injection point and the log is hash-chained. The brief says which case happened.
+- Drift is measured against the handoff's own snapshot (HEAD and changed-file hashes), not against the last snapshot of anybody else.
+- `resume` requires an existing handoff and an identified agent (`--agent`, or an active session). It refuses before changing anything, so a failed resume never starts a session. There is no read-only peek mode: reading the brief is recorded as a pickup on purpose; to just read a handoff, open the file or run `pcs handoff --stdout`.
+- Integrity failure still prints the brief (the next agent needs it) with a loud warning and exit code 2.
+- `handoff.generated` records the path relative to the repo when the file is inside it, so the record survives moving or renaming the project folder; absolute otherwise.
