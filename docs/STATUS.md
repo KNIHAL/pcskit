@@ -38,7 +38,7 @@ v1 is **CLI only**. MCP server, dashboard and background watcher come after the 
 3. ~~Verification (`pcs test`)~~ done.
 4. ~~Handoff (`pcs handoff`, `pcs note`)~~ done.
 5. ~~Resume (`pcs resume`)~~ done.
-6. **Real test**: run on `causly-server`: Claude works, gets interrupted, PCS makes the handoff, GPT continues, PCS verifies.
+6. ~~Real test~~ done on a clone of `causly-server` (240 files, Windows): session, notes, passing and failing tests, handoff, drift, resume by a second agent, verify all worked. Known nits: commands in the handoff lose shell quoting; note ids are event ids (not 1,2,3).
 
 After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
 
