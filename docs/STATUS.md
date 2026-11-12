@@ -43,7 +43,7 @@ v1 is **CLI only**. MCP server, dashboard and background watcher come after the 
 After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
 
 ## Next step
-Step 5: `pcs resume`: print the brief for the next agent and record the pickup. It should read the latest `handoff.generated` event, warn if the repo (fingerprint/HEAD) moved since the handoff was written or the file's SHA-256 no longer matches, and record a `session`-linked pickup event.
+v1 CLI is complete (steps 1-6 done). Next: background watcher (chokidar), then MCP server, then dashboard.
 
 ## How to continue in a new chat
 Tell the AI: "Read D:\pcs\AGENTS.md and D:\pcs\docs\STATUS.md, then continue with the Next step."
