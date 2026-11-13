@@ -97,6 +97,20 @@ describe("mcp: tools", () => {
     expect((await call(c, "pcs_verify")).text).toContain('"ok": true');
   });
 
+  it("keeps results short: no hashes, no raw payloads, no full file records", async () => {
+    const c = await connect({ agent: "claude" });
+    for (let i = 0; i < 40; i++) writeFileSync(join(dir, `f${i}.ts`), "x\n");
+    const start = await call(c, "pcs_session_start", { agent: "claude" });
+    const status = await call(c, "pcs_status");
+    const snap = await call(c, "pcs_snapshot");
+    for (const r of [start, status, snap]) {
+      expect(r.text).not.toMatch(/prev_hash|"hash"|"digest"|"sha256"|"payload"/);
+      expect(r.text.length).toBeLessThan(3500);
+    }
+    expect(JSON.parse(snap.text)).toMatchObject({ changedFiles: 40, moreFiles: 15 });
+    expect(JSON.parse(status.text).recent[0]).toMatch(/^#\d+ \S+ \[(verified|reported|inferred)\] /);
+  });
+
   it("returns errors as tool errors, not crashes", async () => {
     const c = await connect();
     const r = await call(c, "pcs_resume", { agent: "gpt" }); // no handoff yet

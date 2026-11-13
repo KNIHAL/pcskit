@@ -57,6 +57,55 @@ async function guard(fn: () => Promise<ToolResult>): Promise<ToolResult> {
   }
 }
 
+// --- compact results: tell the agent what it needs, not the whole database row ---------------
+
+const MAX_FILES = 25;
+
+type Snap = Awaited<ReturnType<typeof takeSnapshot>>;
+
+function compactSnapshot(s: Snap | null) {
+  if (!s) return null;
+  return {
+    id: s.id,
+    kind: s.kind,
+    branch: s.branch,
+    head: s.head,
+    changedFiles: s.files.length,
+    files: s.files.slice(0, MAX_FILES).map((f) => `${f.untracked ? "??" : `${f.index}${f.worktree}`.replace(/ /g, "_")} ${f.path}${f.sensitive ? " [sensitive: name only]" : ""}`),
+    ...(s.files.length > MAX_FILES ? { moreFiles: s.files.length - MAX_FILES } : {}),
+    truncated: s.truncated,
+  };
+}
+
+function compactStatus(s: Awaited<ReturnType<typeof getStatus>>) {
+  return {
+    project: { name: s.project.name, root: s.project.root },
+    branch: s.git.branch,
+    head: s.git.head ? { commit: s.git.head.hash.slice(0, 7), subject: s.git.head.subject } : null,
+    changedFiles: s.git.changed.length,
+    changed: s.git.changed.slice(0, MAX_FILES).map((f) => `${f.untracked ? "??" : `${f.index}${f.worktree}`.replace(/ /g, "_")} ${f.path}${f.sensitive ? " [sensitive: name only]" : ""}`),
+    session: s.session ? { id: s.session.id, agent: s.session.agent, since: s.session.started_at } : null,
+    openTasks: s.openTasks.map((t) => ({ id: t.id, status: t.status, title: t.title })),
+    integrity: s.integrity,
+    watcher: s.watcher.running ? "running" : s.watcher.stale ? "dead (stale lock)" : "not running",
+    recent: s.recentEvents.map((e) => `#${e.id} ${e.type} [${e.provenance}] ${e.source}`),
+  };
+}
+
+function compactStart(r: Awaited<ReturnType<typeof startSession>>) {
+  return {
+    session: { id: r.session.id, agent: r.session.agent, since: r.session.started_at },
+    interrupted: r.interrupted ? { id: r.interrupted.id, agent: r.interrupted.agent } : null,
+    snapshot: compactSnapshot(r.snapshot),
+  };
+}
+
+function compactEnd(r: Awaited<ReturnType<typeof endSession>>) {
+  return {
+    session: { id: r.id, agent: r.agent, ended_at: r.ended_at, reason: r.end_reason },
+    snapshot: compactSnapshot(r.snapshot),
+  };
+}
 export function createMcpServer(options: McpOptions): McpServer {
   const cwd = options.project;
   const defaultAgent = options.agent;
@@ -80,7 +129,7 @@ export function createMcpServer(options: McpOptions): McpServer {
   server.registerTool(
     "pcs_status",
     { title: "Project status", description: `Real git state, active session, open tasks, watcher and log integrity. ${UNTRUSTED}`, inputSchema: {}, annotations: read },
-    () => guard(async () => json(await getStatus(cwd))),
+    () => guard(async () => json(compactStatus(await getStatus(cwd)))),
   );
 
   server.registerTool(
@@ -127,7 +176,7 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: { agent: z.string().min(1).max(64).describe("Your name, e.g. claude, gpt, codex.") },
       annotations: write,
     },
-    ({ agent }) => guard(async () => json(await startSession(cwd, agent))),
+    ({ agent }) => guard(async () => json(compactStart(await startSession(cwd, agent)))),
   );
 
   server.registerTool(
@@ -142,13 +191,13 @@ export function createMcpServer(options: McpOptions): McpServer {
       annotations: write,
     },
     ({ reason, note }) =>
-      guard(async () => json(await endSession(cwd, { ...(reason !== undefined ? { reason } : {}), ...(note !== undefined ? { note } : {}) }))),
+      guard(async () => json(compactEnd(await endSession(cwd, { ...(reason !== undefined ? { reason } : {}), ...(note !== undefined ? { note } : {}) })))),
   );
 
   server.registerTool(
     "pcs_snapshot",
     { title: "Snapshot the repo", description: "Record a verified snapshot of the git state now.", inputSchema: {}, annotations: write },
-    () => guard(async () => json(await takeSnapshot(cwd))),
+    () => guard(async () => json(compactSnapshot(await takeSnapshot(cwd)))),
   );
 
   server.registerTool(
