@@ -65,3 +65,10 @@ Short record of architecture and security decisions. Add an entry when you decid
 - The watcher is not an MCP tool: it is a long-running process the person starts.
 - Writes are attributed to the `agent` argument, else `--agent`, else the active session (existing core rules). Agent claims stay `reported`.
 - Handoff formatting fix: commands are rendered with `formatArgv` (JSON-quoting anything a shell would split), so the reader sees what actually ran. Note ids remain event ids (a note id is its event id); changing that would need a separate sequence and is not worth the migration.
+
+## Dashboard (`pcs dashboard`)
+- Read-only on purpose: no buttons that change the log. Changes go through the CLI or MCP, where provenance is decided.
+- Local-only security: loopback bind, per-run random token (URL once, then a SameSite=Strict HttpOnly cookie), Host header check against DNS rebinding, strict CSP with a per-response nonce, `Cache-Control: no-store`. No CORS headers, so other websites cannot read it.
+- The HTML is static and contains no project data. Data comes from `/api/overview` and is inserted with textContent only; a test forbids innerHTML-style APIs in the page. Recorded text (commit subjects, notes, test output) therefore cannot become markup or script.
+- No framework, no build step, no extra dependency: one page string plus `node:http`.
+- Not included yet: handoff file viewer, per-run detail pages, charts. Add only if real use shows they are needed.

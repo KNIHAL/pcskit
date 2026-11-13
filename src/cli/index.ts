@@ -530,6 +530,30 @@ program
   });
 
 program
+  .command("dashboard")
+  .description("Open a read-only local dashboard (127.0.0.1 only, access token in the URL)")
+  .option("--port <n>", "port (default 7777; 0 = any free port)")
+  .option("--open", "open the dashboard in your browser")
+  .action(async (opts: { port?: string; open?: boolean }) => {
+    const port = opts.port === undefined ? undefined : Number(opts.port);
+    if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) {
+      throw new PcsError("INVALID_INPUT", "--port must be an integer between 0 and 65535.");
+    }
+    const { startDashboard } = await import("../dashboard/server");
+    const d = await startDashboard({ project: process.cwd(), ...(port !== undefined ? { port } : {}) });
+    console.log(`PCS dashboard (read-only, this machine only):\n${d.url}\nPress Ctrl+C to stop.`);
+    if (opts.open) {
+      const { spawn } = await import("node:child_process");
+      const [cmd, args] =
+        process.platform === "win32" ? ["cmd", ["/c", "start", "", d.url]] : process.platform === "darwin" ? ["open", [d.url]] : ["xdg-open", [d.url]];
+      spawn(cmd as string, args as string[], { stdio: "ignore", detached: true }).on("error", () => undefined).unref();
+    }
+    const quit = () => void d.close().then(() => process.exit(0));
+    process.once("SIGINT", quit);
+    process.once("SIGTERM", quit);
+  });
+
+program
   .command("mcp")
   .description("Run PCS as an MCP server over stdio, so agents can call pcs tools themselves")
   .option("--project <dir>", "project directory (default: the current directory)")

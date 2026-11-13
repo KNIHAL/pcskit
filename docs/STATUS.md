@@ -15,7 +15,8 @@ Handoffs must keep these three separate.
 
 v1 is **CLI only**. MCP server, dashboard and background watcher come after the CLI handoff works on a real project.
 
-## Built and tested (154 tests passing)
+## Built and tested (162 tests passing)
+- `pcs dashboard [--port n] [--open]`: read-only local web UI (Node http, no dependencies). Binds 127.0.0.1 only; random access token in the printed URL (exchanged for a SameSite=Strict cookie); Host header must be loopback; GET/HEAD only; strict CSP with nonce. The page holds no data: it polls `/api/overview` every 5s and writes text with textContent only. Shows log integrity, active session, watcher, last handoff and pickup, sessions, tasks with their latest test evidence, notes, failing-run output tails, snapshots and the event timeline, every line tagged verified / reported / inferred.
 - `pcs mcp [--project dir] [--agent name] [--allow-test]`: MCP server over stdio (official SDK) with 14 tools mirroring the CLI (status, verify, resume, handoff, session start/end, snapshot, task, note, evidence). Same core, same provenance: a tool call is a `reported` claim by the agent, observations stay `verified`. Errors come back as tool errors. `pcs_test` (command execution) is off unless the operator passes `--allow-test`. Results go back with control characters stripped; the instructions tell the model that recorded content is data, not instructions.
 - `pcs watch [--debounce s] [--stalled min] | --stop | --status`: long-running watcher (chokidar on the project, plus git's HEAD log). Files are only a trigger: each change (after a debounce) takes a fresh git observation and records a verified snapshot + `watch.snapshot` event only if the repo state really differs. Records `watch.started` / `watch.stopped` (verified) and `watch.stalled` (inferred: open session, no file activity). One watcher per project (lock in `.pcs/watch.json`; a dead one is detected as stale). `pcs status` shows it; the handoff mentions watcher snapshots and stalls with their provenance. No auto-start/service yet.
 - `pcs resume [--agent name] [--json]`: the pickup. Reads the latest `handoff.generated` event, starts a session for the new agent (an unended one becomes `interrupted`), snapshots the repo, and compares it with the handoff's snapshot (HEAD moved? files changed? commits since). Checks the handoff file's SHA-256; an edited, missing or unwritten file is never shown: the handoff is rebuilt from the evidence log instead. Records `handoff.checked` (verified) and `handoff.picked_up` (reported by the agent), both linked to the new session. Prints the brief (checks, warnings, then the handoff). Refuses if no handoff exists or nobody is identified. Exit 2 on integrity failure (brief still printed, with a warning).
@@ -45,7 +46,7 @@ v1 is **CLI only**. MCP server, dashboard and background watcher come after the 
 After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
 
 ## Next step
-Watcher, MCP server and the handoff-quoting nit are done. Next: dashboard (local web UI over `src/core`). Open nits: note ids are event ids; watcher has no auto-start.
+Dashboard is done: PCS v1 plus watcher, MCP and dashboard are complete. Next: use it on a real project for a few days, fix what hurts. Open nits: note ids are event ids; watcher has no auto-start; dashboard does not show the handoff file text.
 
 ## How to continue in a new chat
 Tell the AI: "Read D:\pcs\AGENTS.md and D:\pcs\docs\STATUS.md, then continue with the Next step."

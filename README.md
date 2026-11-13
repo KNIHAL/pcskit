@@ -34,6 +34,7 @@ node dist/cli.js --help
 | `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
 | `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
 | `pcs watch [--debounce s] [--stalled min]` / `--stop` / `--status` | Background watcher: snapshot on file or HEAD changes, infer stalled sessions |
+| `pcs dashboard [--port n] [--open]` | Read-only local web dashboard: sessions, tasks with evidence, notes, test runs, snapshots, timeline (127.0.0.1 only, token in the URL) |
 | `pcs mcp [--project dir] [--agent name] [--allow-test]` | Run PCS as an MCP server (stdio) so agents call the pcs tools themselves |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
