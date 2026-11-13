@@ -19,8 +19,10 @@
     "dev": "tsx src/cli/index.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "chokidar": "^6.0.0",
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

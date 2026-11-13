@@ -57,3 +57,11 @@ Short record of architecture and security decisions. Add an entry when you decid
 - Stalled = open session and no file activity for N minutes: an `inferred` event, reported once per quiet period.
 - Single watcher per project via a lock file with the pid; stop is requested through a stop file polled by the watcher, so it also works on Windows where signals cannot be handled. Stale locks (dead pid) are taken over and recorded.
 - Not done on purpose: auto-start on login, Windows service. The watcher runs while its process runs.
+
+## MCP server (`pcs mcp`)
+- Thin wrapper over `src/core`: no logic of its own, so the CLI and MCP cannot drift apart. One tool per core action, `pcs_` prefix, read/write annotations set.
+- Project is fixed by `--project` (not the client's working directory, which hosts like Claude Desktop do not control). Starting fails early, on stderr, if it is not an initialized PCS project. Nothing but protocol goes to stdout.
+- `pcs_test` runs commands on the machine, so a prompt-injected agent could abuse it. It is only registered with `--allow-test`; the CLI `pcs test` stays available to the human.
+- The watcher is not an MCP tool: it is a long-running process the person starts.
+- Writes are attributed to the `agent` argument, else `--agent`, else the active session (existing core rules). Agent claims stay `reported`.
+- Handoff formatting fix: commands are rendered with `formatArgv` (JSON-quoting anything a shell would split), so the reader sees what actually ran. Note ids remain event ids (a note id is its event id); changing that would need a separate sequence and is not worth the migration.

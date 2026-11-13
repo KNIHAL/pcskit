@@ -34,6 +34,7 @@ node dist/cli.js --help
 | `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
 | `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
 | `pcs watch [--debounce s] [--stalled min]` / `--stop` / `--status` | Background watcher: snapshot on file or HEAD changes, infer stalled sessions |
+| `pcs mcp [--project dir] [--agent name] [--allow-test]` | Run PCS as an MCP server (stdio) so agents call the pcs tools themselves |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
@@ -43,3 +44,17 @@ node dist/cli.js --help
 - `src/cli`: argument parsing and output only
 - `tests`: vitest suites
 
+
+## Use PCS from an agent (MCP)
+Add this to the MCP config of Claude Desktop, Cursor or any MCP client (use the real paths):
+```json
+{
+  "mcpServers": {
+    "pcs": {
+      "command": "node",
+      "args": ["D:/pcs/dist/cli.js", "mcp", "--project", "D:/your-project", "--agent", "claude"]
+    }
+  }
+}
+```
+Tools: `pcs_status`, `pcs_verify`, `pcs_resume`, `pcs_handoff`, `pcs_session_start|end`, `pcs_snapshot`, `pcs_task_add|list|update`, `pcs_note_add|list|resolve`, `pcs_evidence_list`. Start with `pcs_resume`. `pcs_test` (runs a command on your machine) exists only with `--allow-test`.

@@ -8,7 +8,7 @@ import { insertEvent, type ChainReport } from "./events";
 import type { CommitInfo, CommittedFile } from "./git";
 import { verifyIntegrity } from "./integrity";
 import { readNotes, type Note } from "./notes";
-import { cap, code, fenced, oneLine, secs, short, tag, type Tag } from "./markdown";
+import { cap, code, fenced, formatArgv, oneLine, secs, short, tag, type Tag } from "./markdown";
 import { isSensitivePath } from "./redact";
 import type { RunOutcome } from "./runner";
 import { activeSession, type Session } from "./sessions";
@@ -274,7 +274,7 @@ export async function buildHandoff(cwd: string, opts: { session?: number | undef
       const view = runViews.find((v) => v.id === r.id)!;
       issues.push({
         provenance: "verified",
-        text: `The latest run of \`${r.argv.join(" ").replace(/`/g, "'").slice(0, 200)}\` (run #${r.id}) ${r.outcome.toUpperCase()}.`,
+        text: `The latest run of \`${formatArgv(r.argv).replace(/`/g, "'").slice(0, 200)}\` (run #${r.id}) ${r.outcome.toUpperCase()}.`,
       });
       if (failures.length < MAX_FAILURES_SHOWN) {
         failures.push({ run: view, output: r.output.slice(-MAX_FAILURE_OUTPUT) });
@@ -524,7 +524,7 @@ export function renderHandoff(h: Handoff): string {
   else {
     L.push(h.tests.scope === "session" ? "Runs PCS executed during this session (newest first):" : "Most recent runs PCS executed (none during this session):", "");
     for (const r of h.tests.runs) {
-      L.push(`- ${tag("verified")} run #${r.id} ${describeRun(r)} ${code(r.argv.join(" "), 200)}: ${freshness(r.current)}`);
+      L.push(`- ${tag("verified")} run #${r.id} ${describeRun(r)} ${code(formatArgv(r.argv), 200)}: ${freshness(r.current)}`);
     }
   }
   for (const fl of h.tests.failures) {

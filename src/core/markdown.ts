@@ -53,3 +53,8 @@ export function cap<T>(items: T[], n: number): { shown: T[]; more: number } {
 export function secs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
+
+/** An argument list as a command line a reader can copy: anything but plain characters is JSON-quoted. */
+export function formatArgv(argv: string[]): string {
+  return argv.map((a) => (a === "" || /[^\w@%+=:,./\\-]/.test(a) ? JSON.stringify(a) : a)).join(" ");
+}

@@ -6,6 +6,7 @@ import {
   listNotes,
   resolveNote,
   resume,
+  formatArgv,
   PcsError,
   requestStop,
   startWatcher,
@@ -316,7 +317,7 @@ function safeText(s: string): string {
 }
 
 function formatCommand(argv: string[]): string {
-  return safe(argv.map((a) => (a === "" || /[\s"']/.test(a) ? JSON.stringify(a) : a)).join(" "));
+  return safe(formatArgv(argv));
 }
 
 function describeExit(r: TestRun): string {
@@ -526,6 +527,26 @@ program
     await w.ready;
     console.log("Press Ctrl+C or run `pcs watch --stop` to stop.");
     await w.done;
+  });
+
+program
+  .command("mcp")
+  .description("Run PCS as an MCP server over stdio, so agents can call pcs tools themselves")
+  .option("--project <dir>", "project directory (default: the current directory)")
+  .option("--agent <name>", "default agent name recorded on writes")
+  .option("--allow-test", "also expose pcs_test, which runs commands on this machine (off by default)")
+  .action(async (opts: { project?: string; agent?: string; allowTest?: boolean }) => {
+    const project = opts.project ?? process.cwd();
+    await getStatus(project); // fail early (to stderr) if this is not an initialized PCS project
+    const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+    const { createMcpServer } = await import("../mcp/server");
+    const server = createMcpServer({
+      project,
+      ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
+      ...(opts.allowTest ? { allowTest: true } : {}),
+    });
+    await server.connect(new StdioServerTransport());
+    console.error(`pcs mcp: serving ${safe(project)}${opts.allowTest ? " (pcs_test enabled)" : ""}`);
   });
 
 program.parseAsync().catch((err: unknown) => {
