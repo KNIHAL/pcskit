@@ -113,10 +113,43 @@ describe("mcp: tools", () => {
 
   it("returns errors as tool errors, not crashes", async () => {
     const c = await connect();
-    const r = await call(c, "pcs_resume", { agent: "gpt" }); // no handoff yet
-    expect(r.isError).toBe(true);
-    expect(r.text).toContain("No handoff exists yet");
+    expect((await call(c, "pcs_resume")).isError).toBe(true); // nobody identified: no server --agent, no session
     expect((await call(c, "pcs_task_update", { id: 99, status: "done" })).isError).toBe(true);
+    expect((await call(c, "pcs_session_start")).isError).toBe(true); // no name given, none configured
+  });
+
+  it("resume works even when nobody wrote a handoff first", async () => {
+    const c = await connect({ agent: "cursor" });
+    await call(c, "pcs_session_start", { agent: "claude" });
+    await call(c, "pcs_note_add", { kind: "next", text: "Wire the flag" });
+    const r = await call(c, "pcs_resume"); // claude died without a handoff
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain("Nobody wrote a handoff");
+    expect(r.text).toContain("Wire the flag");
+    expect(r.text).toContain("`cursor`"); // picked up under the server's configured name
+  });
+
+  it("attributes writes to the active session's agent, not to a different configured name", async () => {
+    const c = await connect({ agent: "cursor" });
+    await call(c, "pcs_session_start", { agent: "grok" }); // the model called itself grok
+    await call(c, "pcs_task_add", { title: "t" });
+    await call(c, "pcs_note_add", { kind: "next", text: "n" });
+    const rows = await withDb(dir, (db) => recentEvents(db, 50));
+    for (const type of ["task.created", "note.added"]) {
+      expect(rows.find((e) => e.type === type)!.source).toBe("grok");
+    }
+    // With no session, the configured name is used; an explicit name always wins.
+    await call(c, "pcs_session_end", { reason: "completed" });
+    await call(c, "pcs_note_add", { kind: "issue", text: "after" });
+    await call(c, "pcs_note_add", { kind: "issue", text: "explicit", agent: "codex" });
+    const after = (await withDb(dir, (db) => recentEvents(db, 50))).filter((e) => e.type === "note.added");
+    expect(after.find((e) => JSON.stringify(e.payload).includes("after"))!.source).toBe("cursor");
+    expect(after.find((e) => JSON.stringify(e.payload).includes("explicit"))!.source).toBe("codex");
+  });
+
+  it("starts a session under the configured name when none is passed", async () => {
+    const c = await connect({ agent: "cursor" });
+    expect((await call(c, "pcs_session_start")).text).toContain('"agent": "cursor"');
   });
 
   it("rejects malformed input before touching the project", async () => {

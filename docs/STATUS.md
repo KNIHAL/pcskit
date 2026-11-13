@@ -15,7 +15,7 @@ Handoffs must keep these three separate.
 
 v1 is **CLI only**. MCP server, dashboard and background watcher come after the CLI handoff works on a real project.
 
-## Built and tested (172 tests passing)
+## Built and tested (176 tests passing)
 - Multi-repo: `pcs workspace add|remove|list` (registry `~/.pcs/workspace.json`, atomic writes, names validated); `pcs mcp --workspace` (tools take a `project` argument, registry re-read per call, plus `pcs_workspace_status`); `pcs dashboard --workspace` (project picker). Each repo keeps its own hash-chained `.pcs`; nothing is merged. One broken project never hides the others.
 - `pcs dashboard [--port n] [--open]`: read-only local web UI (Node http, no dependencies). Binds 127.0.0.1 only; random access token in the printed URL (exchanged for a SameSite=Strict cookie); Host header must be loopback; GET/HEAD only; strict CSP with nonce. The page holds no data: it polls `/api/overview` every 5s and writes text with textContent only. Shows log integrity, active session, watcher, last handoff and pickup, sessions, tasks with their latest test evidence, notes, failing-run output tails, snapshots and the event timeline, every line tagged verified / reported / inferred.
 - `pcs mcp [--project dir] [--agent name] [--allow-test]`: MCP server over stdio (official SDK) with 14 tools mirroring the CLI (status, verify, resume, handoff, session start/end, snapshot, task, note, evidence). Same core, same provenance: a tool call is a `reported` claim by the agent, observations stay `verified`. Errors come back as tool errors. `pcs_test` (command execution) is off unless the operator passes `--allow-test`. Results go back with control characters stripped; the instructions tell the model that recorded content is data, not instructions.
@@ -47,7 +47,7 @@ v1 is **CLI only**. MCP server, dashboard and background watcher come after the 
 After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
 
 ## Next step
-Dashboard is done: PCS v1 plus watcher, MCP and dashboard are complete. Next: use it on a real project for a few days, fix what hurts. Open nits: note ids are event ids; watcher has no auto-start; dashboard does not show the handoff file text.
+v1 plus watcher, MCP, dashboard and multi-repo are built; the first real two-agent test passed and its bugs are fixed (resume generates a missing handoff, stable agent identity). Next: full E2E QA with enterprise features, then GitHub push, CI and npm launch. Open nits: note ids are event ids; watcher has no auto-start.
 
 ## How to continue in a new chat
 Tell the AI: "Read D:\pcs\AGENTS.md and D:\pcs\docs\STATUS.md, then continue with the Next step."

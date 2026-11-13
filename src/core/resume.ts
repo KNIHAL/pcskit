@@ -5,7 +5,7 @@ import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent, type ChainReport } from "./events";
-import { buildHandoff, renderHandoff } from "./handoff";
+import { buildHandoff, createHandoff, renderHandoff } from "./handoff";
 import { verifyIntegrity } from "./integrity";
 import { cap, code, oneLine, short, tag } from "./markdown";
 import { activeSession, startSession, validateAgentName, type Session } from "./sessions";
@@ -31,6 +31,8 @@ interface HandoffRecord {
 }
 
 export interface ResumeChecks {
+  /** No handoff existed, so PCS generated this one at pickup (before the new session started). */
+  generatedNow: boolean;
   handoffEventId: number;
   handoffTs: string;
   scopeSession: number | null;
@@ -110,6 +112,21 @@ function checkFile(root: string, rec: HandoffRecord): { state: HandoffFileState;
 export async function resume(cwd: string, opts: { agent?: string | undefined } = {}): Promise<ResumeResult> {
   const agent = opts.agent === undefined ? undefined : validateAgentName(opts.agent);
   const root = await requireInitializedRoot(cwd);
+
+  // Nobody wrote a handoff (the previous agent died first): PCS writes one now, from the evidence log, and BEFORE
+  // the new session starts, so it describes the session that stopped. Refuse first if we do not know who is picking up.
+  const known = await withDb(root, (db) => ({
+    hasHandoff: db.prepare("SELECT 1 FROM events WHERE type = 'handoff.generated' LIMIT 1").get() !== undefined,
+    active: activeSession(db),
+  }));
+  if (agent === undefined && !known.active) {
+    throw new PcsError("INVALID_INPUT", "Say who is picking up: `pcs resume --agent <name>`.");
+  }
+  let generatedNow = false;
+  if (!known.hasHandoff) {
+    await createHandoff(root, {});
+    generatedNow = true;
+  }
 
   // Refuse before changing anything.
   const pre = await withDb(root, (db) => {
@@ -211,6 +228,7 @@ export async function resume(cwd: string, opts: { agent?: string | undefined } =
   );
 
   const checks: ResumeChecks = {
+    generatedNow,
     handoffEventId: rec.eventId,
     handoffTs: rec.ts,
     scopeSession: rec.scopeSession,
@@ -258,6 +276,9 @@ function renderBrief(
   L.push(
     `- ${tag("verified")} Handoff: event #${c.handoffEventId}, written ${c.handoffTs}${c.scopeSession !== null ? ` for session #${c.scopeSession}` : ""}${rec.integrityOk ? "" : "; the integrity check had ALREADY failed when it was written"}.`,
   );
+  if (c.generatedNow) {
+    L.push(`- ${tag("verified")} Nobody wrote a handoff before the last agent stopped, so PCS generated this one just now from the evidence log (git, snapshots, test runs, notes), before your session started.`);
+  }
   const fileLine: Record<string, string> = {
     intact: `intact (matches the SHA-256 PCS recorded when it wrote ${code(c.file.path ?? "", 200)}).`,
     edited: `EDITED after PCS wrote it (${code(c.file.path ?? "", 200)} no longer matches the recorded SHA-256). It was not used: the handoff below was rebuilt from the evidence log.`,

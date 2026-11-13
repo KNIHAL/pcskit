@@ -21,7 +21,9 @@ import {
   takeSnapshot,
   TASK_STATUSES,
   updateTask,
+  activeSession,
   verifyProject,
+  withDb,
   workspaceStatus,
   type WorkspaceEntry,
 } from "../core";
@@ -129,15 +131,21 @@ export function createMcpServer(options: McpOptions): McpServer {
         : "Leave empty: this server serves one project.",
     );
   const defaultAgent = options.agent;
-  const agentOf = (a: string | undefined): string | undefined => a ?? defaultAgent;
-  const agentArg = z.string().max(64).optional().describe("Your name, recorded as the source of this claim. Defaults to the server's --agent.");
+  // Who a write is attributed to: the name the call passes; else the active session's agent (the core's own rule, so a
+  // session and its events never disagree); else this server's configured --agent.
+  const agentFor = async (root: string, explicit: string | undefined): Promise<string | undefined> => {
+    if (explicit !== undefined) return explicit;
+    const active = await withDb(root, (db) => activeSession(db));
+    return active ? undefined : defaultAgent;
+  };
+  const agentArg = z.string().max(64).optional().describe("Leave empty: PCS already knows who you are (your session, or this server's configured name).");
 
   const server = new McpServer(
     { name: "pcs", version: "0.1.0" },
     {
       instructions:
         "PCS (Project Continuity System) keeps verified evidence of what happened in this project so work survives a stopped agent. " +
-        "On starting: call pcs_resume with your name to pick up the last handoff. While working: record tasks (pcs_task_add / pcs_task_update) and notes (pcs_note_add). " +
+        "On starting: call pcs_resume (leave agent empty; PCS knows who you are) to pick up the last handoff; if the last agent died before writing one, PCS writes it for you. With several projects, pass project. While working: record tasks (pcs_task_add / pcs_task_update) and notes (pcs_note_add). " +
         "When you stop: pcs_session_end, add a 'next' note, then pcs_handoff. Lines tagged [verified] were observed by PCS; [reported] and [inferred] are leads, not proof. " +
         UNTRUSTED,
     },
@@ -170,8 +178,13 @@ export function createMcpServer(options: McpOptions): McpServer {
     },
     ({ agent, project }) =>
       guard(async () => {
-        const a = agentOf(agent);
-        const r = await resume(cwdFor(project), a !== undefined ? { agent: a } : {});
+        // Resuming means a NEW agent takes over, so an active session belongs to someone else (usually the one that
+        // just died) unless it already carries this very name. Only then is it reused instead of starting a new one.
+        const root = cwdFor(project);
+        const name = agent ?? defaultAgent;
+        const active = name === undefined ? null : await withDb(root, (db) => activeSession(db));
+        const a = name !== undefined && active?.agent === name ? undefined : name;
+        const r = await resume(root, a !== undefined ? { agent: a } : {});
         return ok(r.brief);
       }),
   );
@@ -193,10 +206,15 @@ export function createMcpServer(options: McpOptions): McpServer {
     {
       title: "Start a session",
       description: "Record that you start working. An unended earlier session is marked interrupted.",
-      inputSchema: { project: projectArg, agent: z.string().min(1).max(64).describe("Your name, e.g. claude, gpt, codex.") },
+      inputSchema: { project: projectArg, agent: z.string().min(1).max(64).optional().describe("Leave empty to use the name this server is configured with (keeps your identity consistent). Only pass it to use a different name.") },
       annotations: write,
     },
-    ({ agent, project }) => guard(async () => json(compactStart(await startSession(cwdFor(project), agent)))),
+    ({ agent, project }) =>
+      guard(async () => {
+        const name = agent ?? defaultAgent;
+        if (name === undefined) throw new PcsError("INVALID_INPUT", "Say who you are: pass agent (this server has no configured name).");
+        return json(compactStart(await startSession(cwdFor(project), name)));
+      }),
   );
 
   server.registerTool(
@@ -224,7 +242,7 @@ export function createMcpServer(options: McpOptions): McpServer {
   server.registerTool(
     "pcs_task_add",
     { title: "Add a task", description: "Add a task (a claim by you, not verified).", inputSchema: { project: projectArg, title: z.string().min(1).max(500), agent: agentArg }, annotations: write },
-    ({ title, agent, project }) => guard(async () => json(await addTask(cwdFor(project), title, agentOf(agent)))),
+    ({ title, agent, project }) => guard(async () => json(await addTask(cwdFor(project), title, await agentFor(cwdFor(project), agent)))),
   );
 
   server.registerTool(
@@ -244,7 +262,7 @@ export function createMcpServer(options: McpOptions): McpServer {
     },
     ({ id, status, note, agent, project }) =>
       guard(async () => {
-        const src = agentOf(agent);
+        const src = await agentFor(cwdFor(project), agent);
         return json(await updateTask(cwdFor(project), id, { status, ...(note !== undefined ? { note } : {}), ...(src !== undefined ? { source: src } : {}) }));
       }),
   );
@@ -258,7 +276,7 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: { project: projectArg, kind: z.enum(NOTE_KINDS), text: z.string().min(1).max(2000), agent: agentArg },
       annotations: write,
     },
-    ({ kind, text, agent, project }) => guard(async () => json(await addNote(cwdFor(project), kind, text, agentOf(agent)))),
+    ({ kind, text, agent, project }) => guard(async () => json(await addNote(cwdFor(project), kind, text, await agentFor(cwdFor(project), agent)))),
   );
 
   server.registerTool(
@@ -275,7 +293,7 @@ export function createMcpServer(options: McpOptions): McpServer {
   server.registerTool(
     "pcs_note_resolve",
     { title: "Resolve a note", description: "Mark a next/avoid/issue note as resolved.", inputSchema: { project: projectArg, id: z.number().int().positive(), agent: agentArg }, annotations: write },
-    ({ id, agent, project }) => guard(async () => json(await resolveNote(cwdFor(project), id, agentOf(agent)))),
+    ({ id, agent, project }) => guard(async () => json(await resolveNote(cwdFor(project), id, await agentFor(cwdFor(project), agent)))),
   );
 
   server.registerTool(
@@ -316,7 +334,7 @@ export function createMcpServer(options: McpOptions): McpServer {
       },
       ({ command, task, timeoutSeconds, agent, project }) =>
         guard(async () => {
-          const src = agentOf(agent);
+          const src = await agentFor(cwdFor(project), agent);
           const { run, linkedTask } = await runTest(cwdFor(project), command, {
             ...(task !== undefined ? { taskId: task } : {}),
             ...(timeoutSeconds !== undefined ? { timeoutMs: timeoutSeconds * 1000 } : {}),

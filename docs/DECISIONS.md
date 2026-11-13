@@ -79,3 +79,8 @@ Short record of architecture and security decisions. Add an entry when you decid
 - MCP: `--workspace` makes every tool take an optional `project`. With one project registered no name is needed; with several, a missing or unknown name is a tool error that lists the valid names (no guessing which repo to write to). Names are matched exactly; paths are not accepted from the agent.
 - The registry is re-read on every call, so `pcs workspace add` works without restarting the agent.
 - Not done: tasks or handoffs that span repos, and a combined timeline. Add when real use needs them.
+
+## Findings from the first real two-agent test (Claude Desktop -> Cursor)
+- `pcs resume` no longer refuses when no handoff exists. The agent that stopped is exactly the one that cannot write it, so PCS writes it at pickup from the evidence log, before the new session starts (so it describes the session that stopped). The brief says it was generated at pickup. Resume still refuses, before writing anything, when it is unknown who is picking up.
+- MCP identity: models call themselves whatever they like ("grok" in Cursor). Writes are attributed to the passed name, else the active session's agent (core rule), else the server's `--agent`. `pcs_session_start` takes an optional name that defaults to `--agent`, so one tool = one stable identity.
+- `pcs_resume` through MCP is a takeover: an active session is reused only if it already carries the same name; otherwise a new session starts and the old one is marked interrupted. (Without this, a new agent would have been recorded under the dead agent's name.)

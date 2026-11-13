@@ -175,8 +175,31 @@ describe("resume: never trusts a handoff file it cannot verify", () => {
 });
 
 describe("resume: refusing and warning", () => {
-  it("refuses when no handoff exists, and starts no session", async () => {
-    await expectCode(resume(dir, { agent: "gpt" }), "INVALID_INPUT");
+  it("writes the handoff itself when the last agent died before anyone did, describing the session that stopped", async () => {
+    await addNote(dir, "next", "Finish the exporter");
+    await startSession(dir, "claude");
+    await addTask(dir, "write exporter");
+    writeFileSync(join(dir, "wip.ts"), "wip\n");
+
+    const r = await resume(dir, { agent: "gpt" });
+    expect(r.checks.generatedNow).toBe(true);
+    expect(r.checks.scopeSession).toBe(1); // the interrupted session, not the one that just started
+    expect(r.session).toMatchObject({ agent: "gpt", id: 2 });
+    expect(r.interrupted).toMatchObject({ agent: "claude" });
+    expect(r.brief).toContain("Nobody wrote a handoff");
+    expect(r.brief).toContain("Finish the exporter");
+    expect(r.brief).toContain("wip.ts");
+    expect(await verifyProject(dir)).toMatchObject({ ok: true });
+    expect((await events()).filter((e) => e.type === "handoff.generated")).toHaveLength(1);
+
+    const again = await resume(dir, { agent: "codex" }); // the handoff now exists: not generated twice
+    expect(again.checks.generatedNow).toBe(false);
+    expect((await events()).filter((e) => e.type === "handoff.generated")).toHaveLength(1);
+  });
+
+  it("does not write a handoff when it cannot tell who is picking up", async () => {
+    await expectCode(resume(dir), "INVALID_INPUT");
+    expect((await events()).some((e) => e.type === "handoff.generated")).toBe(false);
     expect(await listSessions(dir)).toHaveLength(0);
   });
 
