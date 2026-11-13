@@ -72,3 +72,10 @@ Short record of architecture and security decisions. Add an entry when you decid
 - The HTML is static and contains no project data. Data comes from `/api/overview` and is inserted with textContent only; a test forbids innerHTML-style APIs in the page. Recorded text (commit subjects, notes, test output) therefore cannot become markup or script.
 - No framework, no build step, no extra dependency: one page string plus `node:http`.
 - Not included yet: handoff file viewer, per-run detail pages, charts. Add only if real use shows they are needed.
+
+## Multi-repo (workspace)
+- One `.pcs` per repo stays. A shared database would mix unrelated tamper-evident chains, make one repo's corruption everyone's problem, and break the "project folder is self-contained" property. The workspace is only a registry (name + root) in `~/.pcs/workspace.json`.
+- Registering needs an initialized project; the same root is never registered twice (case-insensitive on Windows); clashing folder names get `-2`, `-3`. Removing a project never touches its `.pcs`.
+- MCP: `--workspace` makes every tool take an optional `project`. With one project registered no name is needed; with several, a missing or unknown name is a tool error that lists the valid names (no guessing which repo to write to). Names are matched exactly; paths are not accepted from the agent.
+- The registry is re-read on every call, so `pcs workspace add` works without restarting the agent.
+- Not done: tasks or handoffs that span repos, and a combined timeline. Add when real use needs them.

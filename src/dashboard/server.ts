@@ -14,11 +14,14 @@ import {
   type EvidenceSummary,
 } from "../core";
 import { PAGE } from "./page";
+import { loadWorkspace, PcsError, pickProject, workspaceStatus } from "../core";
 
 export interface DashboardOptions {
   project: string;
   /** 0 picks a free port. Default 7777. */
   port?: number | undefined;
+  /** Show every registered workspace project, with a picker. */
+  workspace?: boolean | undefined;
 }
 
 export interface DashboardHandle {
@@ -109,7 +112,7 @@ export async function buildOverview(project: string) {
  */
 export async function startDashboard(options: DashboardOptions): Promise<DashboardHandle> {
   const project = options.project;
-  await getStatus(project); // fail early if this is not an initialized PCS project
+  if (options.workspace !== true) await getStatus(project); // fail early if this is not an initialized PCS project
   const token = randomBytes(24).toString("hex");
   let port = 0;
 
@@ -149,11 +152,19 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
         "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
       });
     }
+    if (url.pathname === "/api/projects" && options.workspace === true) {
+      try {
+        return send(res, 200, JSON.stringify(await workspaceStatus()), "application/json; charset=utf-8");
+      } catch (err) {
+        return send(res, err instanceof PcsError && err.code === "INVALID_INPUT" ? 400 : 500, JSON.stringify({ error: err instanceof Error ? err.message : "error" }), "application/json; charset=utf-8");
+      }
+    }
     if (url.pathname === "/api/overview") {
       try {
-        return send(res, 200, JSON.stringify(await buildOverview(project)), "application/json; charset=utf-8");
+        const root = options.workspace === true ? pickProject(loadWorkspace(), url.searchParams.get("project") ?? undefined).root : project;
+        return send(res, 200, JSON.stringify(await buildOverview(root)), "application/json; charset=utf-8");
       } catch (err) {
-        return send(res, 500, JSON.stringify({ error: err instanceof Error ? err.message : "error" }), "application/json; charset=utf-8");
+        return send(res, err instanceof PcsError && err.code === "INVALID_INPUT" ? 400 : 500, JSON.stringify({ error: err instanceof Error ? err.message : "error" }), "application/json; charset=utf-8");
       }
     }
     return send(res, 404, "Not found.");

@@ -34,8 +34,9 @@ node dist/cli.js --help
 | `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
 | `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
 | `pcs watch [--debounce s] [--stalled min]` / `--stop` / `--status` | Background watcher: snapshot on file or HEAD changes, infer stalled sessions |
-| `pcs dashboard [--port n] [--open]` | Read-only local web dashboard: sessions, tasks with evidence, notes, test runs, snapshots, timeline (127.0.0.1 only, token in the URL) |
-| `pcs mcp [--project dir] [--agent name] [--allow-test]` | Run PCS as an MCP server (stdio) so agents call the pcs tools themselves |
+| `pcs workspace add [path] [--name n]` / `remove <project>` / `list` | Work across several projects: register initialized repos and see all their states in one list (each keeps its own `.pcs`) |
+| `pcs dashboard [--port n] [--open] [--workspace]` | Read-only local web dashboard: sessions, tasks with evidence, notes, test runs, snapshots, timeline (127.0.0.1 only, token in the URL) |
+| `pcs mcp [--project dir] [--workspace] [--agent name] [--allow-test]` | Run PCS as an MCP server (stdio) so agents call the pcs tools themselves |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
@@ -59,3 +60,5 @@ Add this to the MCP config of Claude Desktop, Cursor or any MCP client (use the 
 }
 ```
 Tools: `pcs_status`, `pcs_verify`, `pcs_resume`, `pcs_handoff`, `pcs_session_start|end`, `pcs_snapshot`, `pcs_task_add|list|update`, `pcs_note_add|list|resolve`, `pcs_evidence_list`. Start with `pcs_resume`. `pcs_test` (runs a command on your machine) exists only with `--allow-test`.
+### Several repos at once
+Run `pcs init` in each repo, then `pcs workspace add` inside each. `pcs workspace list` shows all of them (branch, changes, active agent, last handoff, integrity). Serve them all to an agent with `pcs mcp --workspace --agent claude`: every tool then takes a `project` argument (the names from `pcs_workspace_status`). `pcs dashboard --workspace` adds a project picker. The registry lives in `~/.pcs/workspace.json` (override with `PCS_HOME`).

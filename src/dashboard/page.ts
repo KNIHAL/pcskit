@@ -32,7 +32,7 @@ export const PAGE = `<!doctype html>
 </style>
 </head>
 <body>
-<header><h1 id="title">PCS</h1><span class="mut" id="sub"></span><span class="mut" id="stamp" style="margin-left:auto"></span></header>
+<header><h1 id="title">PCS</h1><select id="proj" hidden aria-label="Project"></select><span class="mut" id="sub"></span><span class="mut" id="stamp" style="margin-left:auto"></span></header>
 <div style="padding:12px 20px"><div id="banner"></div></div>
 <main>
   <section><h2>Now</h2><div id="now"></div></section>
@@ -104,9 +104,24 @@ function render(d) {
   }), "No events.");
 }
 
+let current = null;
+async function loadProjects() {
+  const res = await fetch("/api/projects", { credentials: "same-origin", cache: "no-store" });
+  if (!res.ok) return;
+  const list = await res.json();
+  const sel = $("proj");
+  clear(sel);
+  for (const p of list) { const o = el("option", "", p.name + (p.ok ? (p.session ? "  ·  " + p.session.agent : "") : "  ·  unreadable")); o.value = p.name; sel.append(o); }
+  if (!list.some((p) => p.name === current)) current = list.length ? list[0].name : null;
+  if (current) sel.value = current;
+  sel.hidden = list.length === 0;
+  sel.onchange = () => { current = sel.value; load(); };
+}
 async function load() {
   try {
-    const res = await fetch("/api/overview", { credentials: "same-origin", cache: "no-store" });
+    await loadProjects();
+    const q = current ? "?project=" + encodeURIComponent(current) : "";
+    const res = await fetch("/api/overview" + q, { credentials: "same-origin", cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     render(await res.json());
   } catch (err) {

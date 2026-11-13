@@ -6,7 +6,10 @@ import {
   listNotes,
   resolveNote,
   resume,
+  addProject,
   formatArgv,
+  removeProject,
+  workspaceStatus,
   PcsError,
   requestStop,
   startWatcher,
@@ -529,18 +532,63 @@ program
     await w.done;
   });
 
+const workspace = program.command("workspace").description("Work across several projects: each keeps its own .pcs, this only lists them");
+
+workspace
+  .command("add [path]")
+  .description("Register an initialized project (default: the current one)")
+  .option("--name <name>", "short name used to refer to it (default: the folder name)")
+  .action(async (path: string | undefined, opts: { name?: string }) => {
+    const r = await addProject(path ?? process.cwd(), opts.name);
+    console.log(r.added ? `Registered ${safe(r.entry.name)} (${safe(r.entry.root)})` : `Already registered as ${safe(r.entry.name)}.`);
+  });
+
+workspace
+  .command("remove <project>")
+  .description("Unregister a project by name or path (its .pcs is not touched)")
+  .action((project: string) => {
+    const r = removeProject(project);
+    console.log(`Unregistered ${safe(r.name)}. Its .pcs data was left in place.`);
+  });
+
+workspace
+  .command("list")
+  .description("Show every registered project with its current state")
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const rows = await workspaceStatus();
+    if (opts.json) return console.log(JSON.stringify(rows, null, 2));
+    if (rows.length === 0) return console.log("No projects registered. Run `pcs workspace add` inside an initialized project.");
+    for (const p of rows) {
+      if (!p.ok) {
+        console.log(`${safe(p.name).padEnd(20)} UNREADABLE  ${safe(p.error ?? "")}  (${safe(p.root)})`);
+        continue;
+      }
+      const flags = [
+        p.integrity ? null : "INTEGRITY FAILURE",
+        p.session ? `agent: ${p.session.agent}` : "no active session",
+        `${p.changedFiles} changed`,
+        p.watcher === "running" ? "watcher on" : null,
+        p.lastHandoff ? `handoff ${p.lastHandoff.slice(0, 16)}Z` : "no handoff",
+      ].filter(Boolean);
+      console.log(`${safe(p.name).padEnd(20)} ${safe(p.branch ?? "")} @ ${p.head ?? "-"}  ${safe(flags.join(" · "))}`);
+    }
+    if (rows.some((p) => p.ok && !p.integrity)) process.exitCode = 2;
+  });
+
 program
   .command("dashboard")
   .description("Open a read-only local dashboard (127.0.0.1 only, access token in the URL)")
   .option("--port <n>", "port (default 7777; 0 = any free port)")
+  .option("--workspace", "show every project registered with `pcs workspace add`, with a picker")
   .option("--open", "open the dashboard in your browser")
-  .action(async (opts: { port?: string; open?: boolean }) => {
+  .action(async (opts: { port?: string; open?: boolean; workspace?: boolean }) => {
     const port = opts.port === undefined ? undefined : Number(opts.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) {
       throw new PcsError("INVALID_INPUT", "--port must be an integer between 0 and 65535.");
     }
     const { startDashboard } = await import("../dashboard/server");
-    const d = await startDashboard({ project: process.cwd(), ...(port !== undefined ? { port } : {}) });
+    const d = await startDashboard({ project: process.cwd(), ...(port !== undefined ? { port } : {}), ...(opts.workspace ? { workspace: true } : {}) });
     console.log(`PCS dashboard (read-only, this machine only):\n${d.url}\nPress Ctrl+C to stop.`);
     if (opts.open) {
       const { spawn } = await import("node:child_process");
@@ -558,16 +606,18 @@ program
   .description("Run PCS as an MCP server over stdio, so agents can call pcs tools themselves")
   .option("--project <dir>", "project directory (default: the current directory)")
   .option("--agent <name>", "default agent name recorded on writes")
+  .option("--workspace", "serve every project registered with `pcs workspace add` (tools take a `project` argument)")
   .option("--allow-test", "also expose pcs_test, which runs commands on this machine (off by default)")
-  .action(async (opts: { project?: string; agent?: string; allowTest?: boolean }) => {
+  .action(async (opts: { project?: string; agent?: string; allowTest?: boolean; workspace?: boolean }) => {
     const project = opts.project ?? process.cwd();
-    await getStatus(project); // fail early (to stderr) if this is not an initialized PCS project
+    if (!opts.workspace) await getStatus(project); // fail early (to stderr) if this is not an initialized PCS project
     const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
     const { createMcpServer } = await import("../mcp/server");
     const server = createMcpServer({
       project,
       ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
       ...(opts.allowTest ? { allowTest: true } : {}),
+      ...(opts.workspace ? { workspace: true } : {}),
     });
     await server.connect(new StdioServerTransport());
     console.error(`pcs mcp: serving ${safe(project)}${opts.allowTest ? " (pcs_test enabled)" : ""}`);

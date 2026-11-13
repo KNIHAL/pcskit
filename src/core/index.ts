@@ -17,3 +17,4 @@ export * from "./resume";
 export * from "./project";
 export * from "./watcher";
 export { formatArgv } from "./markdown";
+export * from "./workspace";
