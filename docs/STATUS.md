@@ -15,7 +15,8 @@ Handoffs must keep these three separate.
 
 v1 is **CLI only**. MCP server, dashboard and background watcher come after the CLI handoff works on a real project.
 
-## Built and tested (133 tests passing)
+## Built and tested (146 tests passing)
+- `pcs watch [--debounce s] [--stalled min] | --stop | --status`: long-running watcher (chokidar on the project, plus git's HEAD log). Files are only a trigger: each change (after a debounce) takes a fresh git observation and records a verified snapshot + `watch.snapshot` event only if the repo state really differs. Records `watch.started` / `watch.stopped` (verified) and `watch.stalled` (inferred: open session, no file activity). One watcher per project (lock in `.pcs/watch.json`; a dead one is detected as stale). `pcs status` shows it; the handoff mentions watcher snapshots and stalls with their provenance. No auto-start/service yet.
 - `pcs resume [--agent name] [--json]`: the pickup. Reads the latest `handoff.generated` event, starts a session for the new agent (an unended one becomes `interrupted`), snapshots the repo, and compares it with the handoff's snapshot (HEAD moved? files changed? commits since). Checks the handoff file's SHA-256; an edited, missing or unwritten file is never shown: the handoff is rebuilt from the evidence log instead. Records `handoff.checked` (verified) and `handoff.picked_up` (reported by the agent), both linked to the new session. Prints the brief (checks, warnings, then the handoff). Refuses if no handoff exists or nobody is identified. Exit 2 on integrity failure (brief still printed, with a warning).
 - `pcs note add <kind> <text>|list|resolve <id>`: what git and tests cannot tell the next agent. Kinds: `task` (original task, newest wins), `next` (exact next step), `avoid` (do not touch, and why), `issue` (known problem). Notes are `reported` events in the hash-chained log (no separate table); `next`/`avoid`/`issue` can be resolved.
 - `pcs handoff [--session id] [--out file] [--stdout] [--json]`: takes a fresh verified snapshot, then writes `.pcs/HANDOFF.md` (git-excluded) with: session, original task, completed (verified / passing-but-code-changed / reported-only), in progress, files touched (commits, uncommitted files, what changed since session start), tests (with fingerprint freshness and the output tail of failing runs), unresolved issues, next steps, do-not-touch. Every line is tagged `[verified]`, `[reported by X]` or `[inferred]`. Sensitive files by name only. Records a `handoff.generated` event with the file's SHA-256. Exit 2 (with a loud warning inside the file) if the integrity check fails.
@@ -43,7 +44,7 @@ v1 is **CLI only**. MCP server, dashboard and background watcher come after the 
 After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
 
 ## Next step
-v1 CLI is complete (steps 1-6 done). Next: background watcher (chokidar), then MCP server, then dashboard.
+Background watcher is done. Next: MCP server (thin wrapper over `src/core`), then dashboard. Also pending: small nits (command quoting in handoff, note ids).
 
 ## How to continue in a new chat
 Tell the AI: "Read D:\pcs\AGENTS.md and D:\pcs\docs\STATUS.md, then continue with the Next step."

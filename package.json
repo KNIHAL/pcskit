@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "description": "Project Continuity System - AI-independent development continuity and handoff",
   "type": "module",
-  "bin": { "pcs": "dist/cli.js" },
-  "files": ["dist"],
-  "engines": { "node": ">=22.13" },
+  "bin": {
+    "pcs": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup",
@@ -13,6 +19,7 @@
     "dev": "tsx src/cli/index.ts"
   },
   "dependencies": {
+    "chokidar": "^6.0.0",
     "commander": "^12.1.0"
   },
   "devDependencies": {

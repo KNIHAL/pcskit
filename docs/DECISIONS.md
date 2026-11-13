@@ -49,3 +49,11 @@ Short record of architecture and security decisions. Add an entry when you decid
 - `resume` requires an existing handoff and an identified agent (`--agent`, or an active session). It refuses before changing anything, so a failed resume never starts a session. There is no read-only peek mode: reading the brief is recorded as a pickup on purpose; to just read a handoff, open the file or run `pcs handoff --stdout`.
 - Integrity failure still prints the brief (the next agent needs it) with a loud warning and exit code 2.
 - `handoff.generated` records the path relative to the repo when the file is inside it, so the record survives moving or renaming the project folder; absolute otherwise.
+
+## Watcher (`pcs watch`)
+- File events are never recorded as facts. They only trigger a fresh git observation, and a snapshot is stored only if the fingerprint (HEAD plus changed-file hashes) differs from the last one. This keeps the log small and every recorded line verified.
+- Snapshots from the watcher use kind `manual` (the snapshot kind CHECK is part of the immutable table); the `watch.snapshot` event carries the reason (change, head, stalled, stop).
+- `.git`, `.pcs` and `node_modules` never trigger. Sensitive files appear by name only, as in every snapshot.
+- Stalled = open session and no file activity for N minutes: an `inferred` event, reported once per quiet period.
+- Single watcher per project via a lock file with the pid; stop is requested through a stop file polled by the watcher, so it also works on Windows where signals cannot be handled. Stale locks (dead pid) are taken over and recorded.
+- Not done on purpose: auto-start on login, Windows service. The watcher runs while its process runs.

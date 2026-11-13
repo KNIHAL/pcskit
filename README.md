@@ -33,6 +33,7 @@ node dist/cli.js --help
 | `pcs note add <kind> <text>` / `list` / `resolve <id>` | Record the original task (`task`), exact next steps (`next`), do-not-touch (`avoid`) and known problems (`issue`) |
 | `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
 | `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
+| `pcs watch [--debounce s] [--stalled min]` / `--stop` / `--status` | Background watcher: snapshot on file or HEAD changes, infer stalled sessions |
 | `pcs task add <title> [--agent n]` | Add a task |
 | `pcs task list [--status s]` | List tasks |
 | `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
@@ -41,3 +42,4 @@ node dist/cli.js --help
 - `src/core`: all logic (git adapter, SQLite store, events, sessions, snapshots, tasks, redaction)
 - `src/cli`: argument parsing and output only
 - `tests`: vitest suites
+

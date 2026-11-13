@@ -8,6 +8,7 @@ import { findGitRoot, getGitState, type GitState } from "./git";
 import { verifyIntegrity } from "./integrity";
 import { activeSession, type Session } from "./sessions";
 import { openTasks, type Task } from "./tasks";
+import { readWatcherState, type WatcherState } from "./watcher";
 
 export interface ProjectInfo {
   name: string;
@@ -22,6 +23,7 @@ export interface Status {
   openTasks: Task[];
   recentEvents: EventRow[];
   integrity: ChainReport;
+  watcher: WatcherState;
 }
 
 export interface InitResult {
@@ -97,6 +99,7 @@ export async function getStatus(cwd: string): Promise<Status> {
       openTasks: openTasks(db),
       recentEvents: recentEvents(db, 5),
       integrity: verifyIntegrity(db),
+      watcher: readWatcherState(root),
     };
   });
 }

@@ -15,3 +15,4 @@ export * from "./notes";
 export * from "./handoff";
 export * from "./resume";
 export * from "./project";
+export * from "./watcher";

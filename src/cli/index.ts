@@ -6,6 +6,10 @@ import {
   listNotes,
   resolveNote,
   resume,
+  PcsError,
+  requestStop,
+  startWatcher,
+  watcherState,
   getTaskEvidence,
   getTestRun,
   linkEvidence,
@@ -77,6 +81,7 @@ function formatStatus(s: Status): string {
     s.session
       ? `Session: #${s.session.id} ${safe(s.session.agent)} (since ${s.session.started_at})`
       : "Session: (none active)",
+    `Watcher: ${s.watcher.running ? `running (pid ${s.watcher.pid})` : s.watcher.stale ? "not running (previous one died)" : "not running"}`,
     `Log:     ${integrityLine(integrity)}`,
   ];
   lines.push("", `Open tasks (${s.openTasks.length}):`);
@@ -475,6 +480,52 @@ program
     if (opts.json) console.log(JSON.stringify(r, null, 2));
     else console.log(safeText(r.brief));
     if (!r.checks.integrity.ok) process.exitCode = 2;
+  });
+
+program
+  .command("watch")
+  .description("Watch the project and snapshot it when files or HEAD change, so a stopped agent's last work is recorded")
+  .option("--stop", "ask the running watcher to stop")
+  .option("--status", "show whether a watcher is running")
+  .option("--debounce <seconds>", "quiet time before a snapshot is taken (default 2)")
+  .option("--stalled <minutes>", "report a stalled session after this much inactivity (default 10)")
+  .action(async (opts: { stop?: boolean; status?: boolean; debounce?: string; stalled?: string }) => {
+    const cwd = process.cwd();
+    if (opts.status) {
+      const s = await watcherState(cwd);
+      console.log(
+        s.running
+          ? `Watcher running (pid ${s.pid}, since ${s.startedAt}).`
+          : s.stale
+            ? "Watcher is not running (a previous one died; its lock is stale)."
+            : "Watcher is not running.",
+      );
+      return;
+    }
+    if (opts.stop) {
+      const r = await requestStop(cwd);
+      console.log(r.requested ? "Stop requested; the watcher will exit within a few seconds." : "No watcher is running.");
+      return;
+    }
+    const num = (v: string | undefined, unit: number, name: string): number | undefined => {
+      if (v === undefined) return undefined;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0) throw new PcsError("INVALID_INPUT", `${name} must be a positive number.`);
+      return Math.round(n * unit);
+    };
+    const debounceMs = num(opts.debounce, 1000, "--debounce");
+    const stalledMs = num(opts.stalled, 60_000, "--stalled");
+    const w = await startWatcher(cwd, {
+      ...(debounceMs !== undefined ? { debounceMs } : {}),
+      ...(stalledMs !== undefined ? { stalledMs } : {}),
+      onLog: (line) => console.log(`[pcs watch] ${safe(line)}`),
+    });
+    const quit = () => void w.stop("interrupted by user");
+    process.once("SIGINT", quit);
+    process.once("SIGTERM", quit);
+    await w.ready;
+    console.log("Press Ctrl+C or run `pcs watch --stop` to stop.");
+    await w.done;
   });
 
 program.parseAsync().catch((err: unknown) => {

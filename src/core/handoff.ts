@@ -14,6 +14,7 @@ import type { RunOutcome } from "./runner";
 import { activeSession, type Session } from "./sessions";
 import { compareSnapshots, takeSnapshot, type Snapshot, type SnapshotComparison } from "./snapshots";
 import type { Task } from "./tasks";
+import { watchSummary, type WatchSummary } from "./watcher";
 import { fingerprintOf, latestEvidenceByTask, recentTestRuns, type TestRun } from "./testruns";
 
 export const HANDOFF_FILE = "HANDOFF.md";
@@ -88,6 +89,8 @@ export interface Handoff {
   repo: { branch: string | null; head: string | null; fingerprint: string | null; snapshotId: number | null; error: string | null };
   session: SessionView | null;
   recentSessions: Session[];
+  /** What the background watcher recorded during the session in scope (null: no session). */
+  watch: WatchSummary | null;
   originalTask: Note | null;
   tasks: {
     verified: TaskView[];
@@ -341,6 +344,7 @@ export async function buildHandoff(cwd: string, opts: { session?: number | undef
       },
       session,
       recentSessions,
+      watch: scope ? watchSummary(db, scope.started_at, scope.id) : null,
       originalTask,
       tasks,
       files,
@@ -412,6 +416,13 @@ export function renderHandoff(h: Handoff): string {
     else if (s.ended_at === null) L.push(`- ${tag("verified")} Session #${s.id} (${code(s.agent, 64)}) started ${s.started_at} is still open (never ended).`);
     else L.push(`- ${tag("reported", s.agent)} Session #${s.id} (${code(s.agent, 64)}) started ${s.started_at} ended ${s.ended_at}: ${s.end_reason ?? "?"}.`);
     if (s.endNote) L.push(`- ${tag("reported", s.agent)} Where it stopped: ${code(s.endNote, MAX_NOTE_SHOWN)}`);
+  }
+  if (h.watch && h.watch.snapshots > 0) {
+    L.push(`- ${tag("verified")} The PCS watcher recorded ${h.watch.snapshots} change snapshot(s) during this session; the last at ${h.watch.lastSnapshotAt ?? "?"}.`);
+  }
+  if (h.watch?.stalledAt) {
+    const idle = h.watch.stalledIdleMs !== null ? ` for ${secs(h.watch.stalledIdleMs)}` : "";
+    L.push(`- ${tag("inferred")} The watcher saw no file activity${idle} before ${h.watch.stalledAt} while the session was open: the agent had probably stopped.`);
   }
   if (h.recentSessions.length > 1) {
     L.push("", "Recent sessions (newest first):");
