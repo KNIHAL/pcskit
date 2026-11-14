@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { statSync } from "node:fs";
 import { promisify } from "node:util";
 import { PcsError } from "./errors";
 import { isSensitivePath } from "./redact";
@@ -67,12 +68,24 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout;
 }
 
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 export async function findGitRoot(cwd: string): Promise<string | null> {
   try {
     return (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
   } catch (err) {
     const e = err as { code?: string; stderr?: string };
-    if (e.code === "ENOENT") throw new PcsError("GIT_FAILURE", "git executable not found in PATH.");
+    if (e.code === "ENOENT") {
+      // spawn reports ENOENT both for a missing git binary and for a missing working directory.
+      if (!isDirectory(cwd)) throw new PcsError("INVALID_INPUT", `Directory not found: ${cwd}`);
+      throw new PcsError("GIT_FAILURE", "git executable not found in PATH.");
+    }
     if (/dubious ownership/i.test(e.stderr ?? "")) {
       throw new PcsError(
         "GIT_FAILURE",

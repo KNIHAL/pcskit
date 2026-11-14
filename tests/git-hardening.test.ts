@@ -64,3 +64,19 @@ describe("git adapter hardening", () => {
     expect(git("status", "--porcelain")).toBe(before);
   });
 });
+
+describe("getGitState: bad directory", () => {
+  it("says the directory is missing instead of blaming a missing git executable", async () => {
+    const missing = join(tmpdir(), `pcs-does-not-exist-${Date.now()}`);
+    await expect(getGitState(missing)).rejects.toMatchObject({ code: "INVALID_INPUT", message: expect.stringContaining("Directory not found") });
+  });
+
+  it("treats an existing non-repository directory as not a repo", async () => {
+    const plain = mkdtempSync(join(tmpdir(), "pcs-plain-"));
+    try {
+      expect(await getGitState(plain)).toEqual({ isRepo: false });
+    } finally {
+      rmSync(plain, { recursive: true, force: true });
+    }
+  });
+});
