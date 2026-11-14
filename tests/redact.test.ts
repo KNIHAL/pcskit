@@ -35,6 +35,65 @@ describe("redactText", () => {
   });
 });
 
+describe("redactText: formats found by QA", () => {
+  const more = {
+    stripe: "sk_" + "live_" + "A1b2C3d4E5f6G7h8I9j0",
+    slack: "xox" + "b-123456789012-abcdefghij",
+    google: "AI" + "za" + "SyA1234567890abcdefghijklmnopqrstuv",
+    npm: "npm_" + "abcdefghijklmnopqrstuvwxyz0123456789",
+  };
+
+  it.each(Object.entries(more))("redacts %s tokens", (_n, secret) => {
+    const r = redactText(`x ${secret} y`);
+    expect(r.text).not.toContain(secret);
+    expect(r.count).toBeGreaterThan(0);
+  });
+
+  it("redacts JSON-quoted secrets and keeps the key", () => {
+    const r = redactText('{"password": "hunter2secret", "apiKey":"abcdef123456789", "name": "pcs"}');
+    expect(r.text).not.toContain("hunter2secret");
+    expect(r.text).not.toContain("abcdef123456789");
+    expect(r.text).toContain('"password": [REDACTED:credential]');
+    expect(r.text).toContain('"name": "pcs"');
+    expect(r.count).toBe(2);
+  });
+
+  it("redacts quoted values that contain spaces", () => {
+    const r = redactText('password="my long phrase" next');
+    expect(r.text).not.toContain("long phrase");
+    expect(r.text).toContain("next");
+  });
+
+  it("redacts the password inside a URL but keeps scheme, user and host", () => {
+    const r = redactText("DATABASE_URL=postgres://admin:s3cretPass@db.example.com:5432/app");
+    expect(r.text).not.toContain("s3cretPass");
+    expect(r.text).toContain("postgres://admin:[REDACTED:url-credential]@db.example.com:5432/app");
+  });
+
+  it("redacts Authorization: Basic headers", () => {
+    const r = redactText("Authorization: Basic dXNlcjpwYXNzd29yZA==");
+    expect(r.text).not.toContain("dXNlcjpwYXNzd29yZA");
+  });
+
+  it("redacts a secret passed as the next command-line argument", () => {
+    const r = redactText("deploy --token abc123456789 --verbose --api-key=zzzzzzzzzz");
+    expect(r.text).not.toContain("abc123456789");
+    expect(r.text).not.toContain("zzzzzzzzzz");
+    expect(r.text).toContain("--verbose");
+  });
+
+  it.each([
+    "token: true",
+    "the password field is required",
+    "npm run --tokens 100",
+    "see https://example.com/docs and ssh://git@github.com/org/repo",
+    "mail me at dev@example.com",
+    'password: ""',
+  ])("leaves harmless text alone: %s", (text) => {
+    expect(redactText(text)).toEqual({ text, count: 0 });
+  });
+});
+
 describe("redactDeep", () => {
   it("walks objects and arrays without mutating the input", () => {
     const input = { a: [`x ${fake.aws}`], n: 3, ok: true };
