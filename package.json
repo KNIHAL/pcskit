@@ -1,7 +1,22 @@
 {
-  "name": "pcs",
+  "name": "@causly/pcs",
   "version": "0.1.0",
   "description": "Project Continuity System - AI-independent development continuity and handoff",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ai",
+    "agents",
+    "handoff",
+    "continuity",
+    "mcp",
+    "claude",
+    "cursor",
+    "git",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "pcs": "dist/cli.js"
