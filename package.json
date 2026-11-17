@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Project Continuity System - AI-independent development continuity and handoff",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KNIHAL/project-continuity.git"
+  },
+  "homepage": "https://github.com/KNIHAL/project-continuity#readme",
+  "bugs": {
+    "url": "https://github.com/KNIHAL/project-continuity/issues"
+  },
   "keywords": [
     "ai",
     "agents",
