@@ -2,7 +2,18 @@ import { Command } from "commander";
 import {
   addNote,
   addTask,
+  claudeHooksStatus,
   createHandoff,
+  handleHook,
+  HOOK_EVENTS,
+  installAgentInstructions,
+  installClaudeHooks,
+  isHookEvent,
+  parseHookPayload,
+  parseTargets,
+  uninstallAgentInstructions,
+  uninstallClaudeHooks,
+  type HookScope,
   listNotes,
   resolveNote,
   resume,
@@ -621,6 +632,111 @@ program
     });
     await server.connect(new StdioServerTransport());
     console.error(`pcs mcp: serving ${safe(project)}${opts.allowTest ? " (pcs_test enabled)" : ""}`);
+  });
+
+/** Read the hook's JSON from stdin without ever hanging the agent: size and time are capped. */
+async function readStdin(maxBytes = 1_000_000, timeoutMs = 2000): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let finished = false;
+    const done = (): void => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      process.stdin.pause();
+      process.stdin.unref?.();
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    const timer = setTimeout(done, timeoutMs);
+    process.stdin.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > maxBytes) return done();
+      chunks.push(c);
+    });
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+  });
+}
+
+program
+  .command("hook <event>")
+  .description("Handle an agent lifecycle hook: session-start, pre-compact or session-end (reads the hook JSON on stdin; installed by `pcs hooks install`)")
+  .option("--agent <name>", "agent name recorded for the session", "claude-code")
+  .action(async (event: string, opts: { agent: string }) => {
+    if (!isHookEvent(event)) {
+      throw new PcsError("INVALID_INPUT", `Unknown hook event "${safe(event)}". Use: ${HOOK_EVENTS.join(", ")}.`);
+    }
+    const result = await handleHook(event, parseHookPayload(await readStdin()), { agent: opts.agent });
+    if (result.output) process.stdout.write(`${result.output}\n`);
+    if (result.warning) {
+      console.error(`pcs: ${result.warning}`);
+      process.exitCode = 2; // Claude Code shows stderr to the person and carries on
+    }
+  });
+
+const hooks = program.command("hooks").description("Install PCS hooks into Claude Code so sessions start, checkpoint and end without the agent's help");
+
+hooks
+  .command("install")
+  .description("Add SessionStart, PreCompact and SessionEnd hooks to Claude Code's settings (idempotent; other settings are kept)")
+  .option("--scope <scope>", "local (default, git-ignored), project (shared with the team) or user (every project)", "local")
+  .option("--agent <name>", "agent name for sessions; use the same one in `pcs mcp --agent`", "claude-code")
+  .option("--command <exe>", "how the hook runs pcs (default: pcs); e.g. 'node D:/pcs/dist/cli.js'")
+  .action(async (opts: { scope: string; agent: string; command?: string }) => {
+    const r = await installClaudeHooks(process.cwd(), {
+      scope: opts.scope as HookScope,
+      agent: opts.agent,
+      ...(opts.command !== undefined ? { command: opts.command } : {}),
+    });
+    const names = (l: string[]): string => (l.length > 0 ? l.join(", ") : "none");
+    console.log(`Claude Code settings: ${safe(r.file)} (scope ${r.scope})`);
+    console.log(`Added: ${names(r.added)}. Updated: ${names(r.updated)}. Already installed: ${names(r.unchanged)}.`);
+    console.log(`Sessions are recorded as agent "${r.agent}". Start the MCP server with the same name: pcs mcp --agent ${r.agent}`);
+    console.log("Restart Claude Code for the hooks to take effect.");
+  });
+
+hooks
+  .command("uninstall")
+  .description("Remove the PCS hooks (only those; other hooks and settings stay)")
+  .option("--scope <scope>", "local (default), project or user", "local")
+  .action(async (opts: { scope: string }) => {
+    const r = await uninstallClaudeHooks(process.cwd(), { scope: opts.scope as HookScope });
+    console.log(r.removed.length > 0 ? `Removed ${r.removed.join(", ")} from ${safe(r.file)}.` : `No PCS hooks in ${safe(r.file)}.`);
+  });
+
+hooks
+  .command("status")
+  .description("Show where PCS hooks are installed")
+  .action(async () => {
+    for (const s of await claudeHooksStatus(process.cwd())) {
+      const state = s.installed.length > 0 ? s.installed.join(", ") : s.exists ? "not installed" : "no settings file";
+      console.log(`${s.scope.padEnd(8)} ${state}  (${safe(s.file)})`);
+    }
+  });
+
+const agents = program.command("agents").description("Add or remove the PCS instruction block in CLAUDE.md, AGENTS.md and .cursor/rules for agents without hooks");
+
+agents
+  .command("install")
+  .description("Write (or refresh) a marked PCS block telling agents to resume at start and hand off at the end")
+  .option("--target <list>", "claude, agents, cursor or all (comma-separated); default: the files that exist, else AGENTS.md")
+  .action(async (opts: { target?: string }) => {
+    const parsed = parseTargets(opts.target);
+    for (const r of await installAgentInstructions(process.cwd(), { targets: parsed })) {
+      console.log(`${r.status.padEnd(9)} ${safe(r.file)}`);
+    }
+    console.log("These files are part of your repository: review and commit them if you want the team to share them.");
+  });
+
+agents
+  .command("uninstall")
+  .description("Remove the PCS block from the instruction files (a file that held only that block is deleted)")
+  .action(async () => {
+    const results = await uninstallAgentInstructions(process.cwd());
+    if (results.length === 0) console.log("No instruction files found.");
+    for (const r of results) console.log(`${r.status.padEnd(11)} ${safe(r.file)}`);
   });
 
 program.parseAsync().catch((err: unknown) => {
