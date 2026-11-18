@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, pcsDir, type Db } from "./db";
 import { PcsError } from "./errors";
+import { canonicalPath } from "./paths";
 import { insertEvent, type ChainReport } from "./events";
 import type { CommitInfo, CommittedFile } from "./git";
 import { verifyIntegrity } from "./integrity";
@@ -554,7 +555,7 @@ export function renderHandoff(h: Handoff): string {
 
 /** Path as recorded in the log: relative to the repo root with "/" when inside it, absolute otherwise. */
 function recordedPath(root: string, target: string): string {
-  const rel = relative(resolve(root), target);
+  const rel = relative(canonicalPath(root), canonicalPath(target));
   return rel === "" || rel.startsWith("..") || isAbsolute(rel) ? target : rel.split(sep).join("/");
 }
 
