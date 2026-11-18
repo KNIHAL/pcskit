@@ -37,17 +37,21 @@ function readProject(db: Db): ProjectInfo | undefined {
     | undefined;
 }
 
-/** Keep .pcs/ out of the user's repo without touching any tracked file. */
-function excludeFromGit(root: string): void {
+/** Keep a path out of the user's repo (`.git/info/exclude`) without touching any tracked file. */
+export function addGitExclude(root: string, line: string): void {
   const file = join(root, ".git", "info", "exclude");
   try {
     const current = existsSync(file) ? readFileSync(file, "utf8") : "";
-    if (!current.split(/\r?\n/).includes(`${PCS_DIR}/`)) {
-      appendFileSync(file, `${current.endsWith("\n") || current === "" ? "" : "\n"}${PCS_DIR}/\n`);
+    if (!current.split(/\r?\n/).includes(line)) {
+      appendFileSync(file, `${current.endsWith("\n") || current === "" ? "" : "\n"}${line}\n`);
     }
   } catch {
-    // .git may be a file (worktree/submodule); skip silently, .pcs/ is just untracked then.
+    // .git may be a file (worktree/submodule); skip silently, the path is just untracked then.
   }
+}
+
+function excludeFromGit(root: string): void {
+  addGitExclude(root, `${PCS_DIR}/`);
 }
 
 export async function initProject(cwd: string): Promise<InitResult> {
