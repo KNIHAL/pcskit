@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -114,7 +114,8 @@ describe("handoff: a full flow", () => {
     expect(handoff.doNotTouch.sensitiveFiles).toEqual([".env"]);
 
     // written file, recorded event, intact log
-    expect(path).toBe(join(dir, ".pcs", "HANDOFF.md"));
+    // compared as real paths: on Windows the temp dir can be spelled RUNNER~1 or runneradmin
+    expect(realpathSync.native(path!)).toBe(realpathSync.native(join(dir, ".pcs", "HANDOFF.md")));
     expect(readFileSync(path!, "utf8")).toBe(markdown);
     const evt = await withDb(dir, (db) => recentEvents(db, 20).find((e) => e.type === "handoff.generated")!);
     expect(evt.provenance).toBe("verified");

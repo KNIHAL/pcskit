@@ -62,3 +62,5 @@ Add this to the MCP config of Claude Desktop, Cursor or any MCP client (use the 
 Tools: `pcs_status`, `pcs_verify`, `pcs_resume`, `pcs_handoff`, `pcs_session_start|end`, `pcs_snapshot`, `pcs_task_add|list|update`, `pcs_note_add|list|resolve`, `pcs_evidence_list`. Start with `pcs_resume`. `pcs_test` (runs a command on your machine) exists only with `--allow-test`.
 ### Several repos at once
 Run `pcs init` in each repo, then `pcs workspace add` inside each. `pcs workspace list` shows all of them (branch, changes, active agent, last handoff, integrity). Serve them all to an agent with `pcs mcp --workspace --agent claude`: every tool then takes a `project` argument (the names from `pcs_workspace_status`). `pcs dashboard --workspace` adds a project picker. The registry lives in `~/.pcs/workspace.json` (override with `PCS_HOME`).
+## License
+Apache-2.0. See [LICENSE](LICENSE).

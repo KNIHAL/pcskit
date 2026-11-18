@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 import { win32 } from "node:path";
 import { PcsError } from "./errors";
+import { redactText } from "./redact";
 
 export const MAX_ARGS = 100;
 export const MAX_ARG_CHARS = 4096;
@@ -224,11 +225,26 @@ export function runCommand(argv: readonly string[], opts: RunOptions): Promise<R
     });
 
     const decoders = { stdout: new StringDecoder("utf8"), stderr: new StringDecoder("utf8") };
+    // Live output is redacted line by line (a secret never straddles a line), so the
+    // terminal does not show what the stored copy hides. A partial line is held until its newline.
+    const pending = { stdout: "", stderr: "" };
+    const MAX_PENDING = 4096;
+    const forward = (stream: "stdout" | "stderr", flushAll: boolean): void => {
+      if (!opts.onOutput) return;
+      let buf = pending[stream];
+      let cut = buf.lastIndexOf("\n") + 1;
+      if (flushAll || buf.length - cut > MAX_PENDING) cut = buf.length;
+      if (cut === 0) return;
+      const out = redactText(buf.slice(0, cut)).text;
+      pending[stream] = buf.slice(cut);
+      opts.onOutput(out, stream);
+    };
     const emit = (stream: "stdout" | "stderr", raw: string): void => {
       const text = sanitizeOutput(raw);
       if (!text) return;
       tail.push(text);
-      opts.onOutput?.(text, stream);
+      pending[stream] += text;
+      forward(stream, false);
     };
     const onData = (stream: "stdout" | "stderr") => (chunk: Buffer) => {
       bytes += chunk.length;
@@ -250,6 +266,8 @@ export function runCommand(argv: readonly string[], opts: RunOptions): Promise<R
       clearTimeout(grace);
       emit("stdout", decoders.stdout.end());
       emit("stderr", decoders.stderr.end());
+      forward("stdout", true);
+      forward("stderr", true);
       if (spawnError) {
         tail.push(`pcs: ${spawnError}\n`);
         resolvePromise(result("error", null, null, spawnError));

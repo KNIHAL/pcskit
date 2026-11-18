@@ -131,7 +131,12 @@ export async function resume(cwd: string, opts: { agent?: string | undefined } =
   // Refuse before changing anything.
   const pre = await withDb(root, (db) => {
     const row = db
-      .prepare("SELECT id, ts, payload FROM events WHERE type = 'handoff.generated' ORDER BY id DESC LIMIT 1")
+      // Prefer the latest handoff that was written to a file: a later `pcs handoff --stdout` only prints,
+      // and must not make resume ignore an intact file. If none was ever written, use the latest one.
+      .prepare(
+        "SELECT id, ts, payload FROM events WHERE type = 'handoff.generated' " +
+          "ORDER BY (json_extract(payload, '$.path') IS NOT NULL) DESC, id DESC LIMIT 1",
+      )
       .get() as { id: number; ts: string; payload: string } | undefined;
     if (!row) {
       throw new PcsError("INVALID_INPUT", "No handoff exists yet. The previous agent (or you) should run `pcs handoff` first.");

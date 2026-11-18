@@ -157,6 +157,13 @@ describe("resume: never trusts a handoff file it cannot verify", () => {
     expect(r.brief).toContain("Finish the exporter and wire the flag");
   });
 
+  it("keeps using the intact handoff file after a later print-only handoff", async () => {
+    await claudeWorksAndStops();
+    await createHandoff(dir, { noFile: true });
+    const r = await resume(dir, { agent: "gpt" });
+    expect(r.checks.file.state).toBe("intact");
+  });
+
   it("finds and verifies a handoff written to a custom path, inside or outside the repo", async () => {
     await startSession(dir, "claude");
     await createHandoff(dir, { out: join(dir, "HO.md") });

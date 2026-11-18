@@ -118,6 +118,22 @@ describe("pcs test: recording a run", () => {
     await runTest(dir, node("console.log('\\x1b[31mred\\x1b[0m')"), { onOutput: (t) => seen.push(t) });
     expect(seen.join("")).toBe("red\n");
   });
+
+  it("redacts secrets in the live stream too, including a line split across writes", async () => {
+    const script =
+      "process.stdout.write('pass' + 'word=hunter2'); setTimeout(() => process.stdout.write('hunter2\\n'), 50); console.error('ghp_' + 'a1B2'.repeat(9))";
+    const seen: string[] = [];
+    await runTest(dir, node(script), { onOutput: (t) => seen.push(t) });
+    const all = seen.join("");
+    expect(all).not.toMatch(/hunter2|ghp_a1B2/);
+    expect(all).toContain("[REDACTED:");
+  });
+
+  it("flushes a final line that has no newline", async () => {
+    const seen: string[] = [];
+    await runTest(dir, node("process.stdout.write('no newline at end')"), { onOutput: (t) => seen.push(t) });
+    expect(seen.join("")).toBe("no newline at end");
+  });
 });
 
 describe("pcs test: what is stored", () => {

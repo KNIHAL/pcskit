@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
 import { PcsError } from "./errors";
+import { canonicalPath } from "./paths";
 import { getStatus } from "./project";
 
 /**
@@ -25,7 +26,7 @@ export function workspaceFile(): string {
 }
 
 function norm(p: string): string {
-  const r = resolve(p).replace(/\\/g, "/");
+  const r = canonicalPath(p).replace(/\\/g, "/");
   return process.platform === "win32" ? r.toLowerCase() : r;
 }
 
