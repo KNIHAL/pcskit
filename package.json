@@ -1,15 +1,15 @@
 {
-  "name": "@causly/pcs",
+  "name": "pcskit",
   "version": "0.1.0",
   "description": "Project Continuity System - AI-independent development continuity and handoff",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KNIHAL/project-continuity.git"
+    "url": "git+https://github.com/KNIHAL/pcskit.git"
   },
-  "homepage": "https://github.com/KNIHAL/project-continuity#readme",
+  "homepage": "https://github.com/KNIHAL/pcskit#readme",
   "bugs": {
-    "url": "https://github.com/KNIHAL/project-continuity/issues"
+    "url": "https://github.com/KNIHAL/pcskit/issues"
   },
   "keywords": [
     "ai",
@@ -22,9 +22,6 @@
     "git",
     "cli"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "type": "module",
   "bin": {
     "pcs": "dist/cli.js"
