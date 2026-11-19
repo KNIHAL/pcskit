@@ -119,3 +119,11 @@ Short record of architecture and security decisions. Add an entry when you decid
 - Paths containing quotes or newlines are refused. systemd `%`, `$` and backslashes and XML characters are escaped.
 - Uninstall removes the entry and asks a running watcher to stop; it is safe when nothing is installed.
 - Verified live on Windows (install, watcher running, uninstall). The Linux and macOS entries are covered by generator and command-sequence tests with a fake executor; they have not been run on real systems yet (CI runs Linux, macOS CI arrives in P1-7).
+
+## Doctor, deinit, resume --prompt
+
+- `pcs doctor` (`--json`) checks Node (>= 22.13), git, the workspace, project init, schema version, full log integrity, whether `.pcs/` is git-ignored, owner-only permissions (POSIX), config validity, watcher, autostart and Claude hooks. Each check is ok/warn/fail with a fix command; exit code 1 only when something fails (missing optional extras are warnings). It never prints project content.
+- The Node 22 `ExperimentalWarning: SQLite is an experimental feature` is dropped at load time in `db.ts` (only that message; every other warning passes through), so hooks and the MCP server do not write noise to stderr.
+- `pcs deinit` removes everything PCS added: `.pcs/`, the `.pcs/` git-exclude line, project and local Claude hooks, the instruction block in CLAUDE.md/AGENTS.md/Cursor rules, the watcher login entry and the workspace registration. It is a dry run unless `--yes` is given and refuses to proceed if a running watcher will not stop. User-level hooks, the anchor signing key, the global config, and files saved outside `.pcs` are left alone and listed.
+- `pcs resume --prompt` wraps the brief in a paste-ready prompt for an agent without PCS tools. It states the evidence tags, marks everything between the markers as data, and defuses a line in the brief that imitates the end marker.
+- Note ids: a note's id is the id of its `note.added` event. It is already stable, per project and tamper-evident, though not consecutive. A separate numbering table would add a mutable store next to the hash chain, so no migration was added and ids stay as they are.

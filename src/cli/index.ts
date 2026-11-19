@@ -47,6 +47,10 @@ import {
   verifyProject,
   autostartStatus,
   createAnchor,
+  deinitProject,
+  formatDoctor,
+  runDoctor,
+  takeoverPrompt,
   installAutostart,
   uninstallAutostart,
   describePolicy,
@@ -553,9 +557,11 @@ program
   .description("Pick up the latest handoff: check it, snapshot the repo, print the brief and record the pickup")
   .option("--agent <name>", "who is picking up; starts a session for them (default: the active session's agent)")
   .option("--json", "output JSON")
-  .action(async (opts: { agent?: string; json?: boolean }) => {
+  .option("--prompt", "wrap the brief in a ready-to-paste prompt for an agent that has no PCS tools")
+  .action(async (opts: { agent?: string; json?: boolean; prompt?: boolean }) => {
     const r = await resume(process.cwd(), opts.agent !== undefined ? { agent: opts.agent } : {});
     if (opts.json) console.log(JSON.stringify(r, null, 2));
+    else if (opts.prompt) console.log(takeoverPrompt(safeText(r.brief)));
     else console.log(safeText(r.brief));
     if (!r.checks.integrity.ok) process.exitCode = 2;
   });
@@ -605,6 +611,29 @@ program
     await w.ready;
     console.log("Press Ctrl+C or run `pcs watch --stop` to stop.");
     await w.done;
+  });
+
+program
+  .command("doctor")
+  .description("Check the environment and this project, and say how to fix what is wrong")
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const r = await runDoctor(process.cwd());
+    console.log(opts.json ? JSON.stringify(r, null, 2) : safeText(formatDoctor(r)));
+    if (!r.ok) process.exitCode = 1;
+  });
+
+program
+  .command("deinit")
+  .description("Remove everything PCS added to this project (the .pcs folder, hooks, instruction blocks, login entry)")
+  .option("--yes", "actually do it; without this only the plan is shown")
+  .action(async (opts: { yes?: boolean }) => {
+    const r = await deinitProject(process.cwd(), { yes: opts.yes === true });
+    console.log(r.dryRun ? "This would remove:" : "Removed:");
+    for (const x of r.removed) console.log(`  - ${x}`);
+    console.log("Left alone:");
+    for (const x of r.kept) console.log(`  - ${x}`);
+    if (r.dryRun) console.log("\nNothing was changed. Run `pcs deinit --yes` to do it.");
   });
 
 const autostart = program.command("autostart").description("Start the watcher automatically at login (Task Scheduler, systemd user unit or launchd agent)");
