@@ -15,9 +15,7 @@ import { requestStop } from "./watcher";
  */
 export type AutostartPlatform = "win32" | "linux" | "darwin";
 
-export interface Exec {
-  (cmd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }>;
-}
+export type Exec = (cmd: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
 
 export const defaultExec: Exec = (cmd, args) =>
   new Promise((resolve) => {

@@ -7,14 +7,20 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: test (${{ matrix.os }}, ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +29,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npx biome lint . --error-on-warnings
+      - name: Test
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.node == 24) }}
+        run: npm test
+      - name: Test with coverage
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.node == 24 }}
+        run: npm run test:coverage
+      - name: Upload coverage
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.node == 24 }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 14
       - run: npm run build
+      - name: Smoke test the built CLI
+        run: node dist/cli.js --version
       - run: npm audit --omit=dev
+      - name: Audit all dependencies
+        run: npm audit

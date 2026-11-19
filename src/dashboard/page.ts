@@ -111,7 +111,7 @@ async function loadProjects() {
   const list = await res.json();
   const sel = $("proj");
   clear(sel);
-  for (const p of list) { const o = el("option", "", p.name + (p.ok ? (p.session ? "  ·  " + p.session.agent : "") : "  ·  unreadable")); o.value = p.name; sel.append(o); }
+  for (const p of list) { const o = el("option", "", p.name + (p.ok ? (p.session ? "  Â·  " + p.session.agent : "") : "  Â·  unreadable")); o.value = p.name; sel.append(o); }
   if (!list.some((p) => p.name === current)) current = list.length ? list[0].name : null;
   if (current) sel.value = current;
   sel.hidden = list.length === 0;

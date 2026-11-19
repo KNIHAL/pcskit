@@ -105,7 +105,7 @@ async function describeFile(root: string, f: ChangedFile, maxHashBytes: number):
   const abs = resolve(rootAbs, f.path);
   if (!abs.startsWith(rootAbs + sep)) return { ...base, kind: "other", size: null, sha256: null };
 
-  let st;
+  let st: Awaited<ReturnType<typeof lstat>>;
   try {
     st = await lstat(abs); // lstat: a symlink pointing outside the repo is never followed
   } catch (err) {

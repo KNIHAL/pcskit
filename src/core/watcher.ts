@@ -93,7 +93,7 @@ function gitHeadLog(root: string): string | null {
     let gitDir = dotGit;
     if (statSync(dotGit).isFile()) {
       const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf8"));
-      if (!m || !m[1]) return null;
+      if (!m?.[1]) return null;
       gitDir = resolve(root, m[1].trim());
     }
     const log = join(gitDir, "logs", "HEAD");
