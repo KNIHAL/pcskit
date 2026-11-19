@@ -94,3 +94,9 @@ Short record of architecture and security decisions. Add an entry when you decid
 - **Installer:** only PCS's own handlers are added or removed (recognized by `hook <event>` plus `pcs`/`cli.js` in the command); everything else in the settings file is kept; invalid JSON or unexpected shapes are refused, never rewritten; writes are atomic. Default scope is `local` (git-excluded). The agent name must be shell-safe because it goes into a command line.
 - **Instruction block:** `pcs agents install` writes one marked block (`<!-- pcs:begin -->` ... `<!-- pcs:end -->`) into CLAUDE.md, AGENTS.md or `.cursor/rules/pcs.mdc` for agents without hooks. Only that block is ever changed; a file that held nothing else is deleted on uninstall. It is an explicit command because it edits files that belong to the repository.
 - **Identity:** the hook agent name and `pcs mcp --agent` should match, or one agent's work is split over two sessions.
+## Signed anchor
+
+- `pcs anchor` writes a small JSON (head hash, last event id, count, timestamp) signed with a local ed25519 key. The key lives in the workspace dir (`~/.pcs/anchor.key`, or `PCS_HOME`), not in the project, so whoever can rewrite `.pcs` cannot forge anchors.
+- `pcs verify --anchor <file>` runs the full integrity check, then checks the signature, that the key is this machine's, and that the anchored event still exists with the same hash and count. This catches truncation of the newest events and a full recomputed rewrite, which the hash chain alone cannot.
+- Keep the anchor file outside the project (another disk, a commit, a ticket). Local only: no network. Anchors are not rotated; a lost key means old anchors can no longer be trusted by `verify`.
+- Creating an anchor on a log that already fails verification is refused.

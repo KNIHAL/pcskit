@@ -20,3 +20,4 @@ export { formatArgv } from "./markdown";
 export * from "./workspace";
 export * from "./hooks";
 export * from "./agents";
+export * from "./anchor";

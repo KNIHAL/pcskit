@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { Command } from "commander";
 import {
   addNote,
@@ -42,7 +43,9 @@ import {
   startSession,
   takeSnapshot,
   updateTask,
+  verifyAnchor,
   verifyProject,
+  createAnchor,
   type ChainReport,
   type Session,
   type Snapshot,
@@ -183,14 +186,46 @@ program
 
 program
   .command("verify")
-  .description("Verify the event log and snapshots are untampered")
-  .action(async () => {
+  .description("Verify the event log and snapshots are untampered (optionally against a signed anchor)")
+  .option("--anchor <file>", "also check the log against a file made by `pcs anchor`")
+  .action(async (opts: { anchor?: string }) => {
+    if (opts.anchor) {
+      const { integrity, anchor } = await verifyAnchor(process.cwd(), opts.anchor);
+      if (!integrity.ok) {
+        console.error(integrityLine(integrity));
+        process.exitCode = 2;
+        return;
+      }
+      if (!anchor.ok) {
+        console.error(`Anchor check FAILED: ${anchor.reason}`);
+        process.exitCode = 2;
+        return;
+      }
+      console.log(`Integrity ${integrityLine(integrity)}`);
+      console.log(`Anchor OK: head #${anchor.anchor?.last_id} (${anchor.anchor?.count} events) from ${anchor.anchor?.created_at}.`);
+      return;
+    }
     const r = await verifyProject(process.cwd());
     if (r.ok) {
       console.log(`Integrity ${integrityLine(r)}`);
     } else {
       console.error(integrityLine(r));
       process.exitCode = 2;
+    }
+  });
+
+program
+  .command("anchor")
+  .description("Write a signed anchor of the log head; keep it outside the project to detect truncation or rewrites")
+  .option("-o, --out <file>", "write the anchor to a file instead of stdout")
+  .action(async (opts: { out?: string }) => {
+    const a = await createAnchor(process.cwd());
+    const json = `${JSON.stringify(a, null, 2)}\n`;
+    if (opts.out) {
+      writeFileSync(opts.out, json);
+      console.log(`Anchor written to ${opts.out} (head #${a.last_id}, ${a.count} events). Store it outside this project.`);
+    } else {
+      process.stdout.write(json);
     }
   });
 
@@ -582,7 +617,7 @@ workspace
         p.watcher === "running" ? "watcher on" : null,
         p.lastHandoff ? `handoff ${p.lastHandoff.slice(0, 16)}Z` : "no handoff",
       ].filter(Boolean);
-      console.log(`${safe(p.name).padEnd(20)} ${safe(p.branch ?? "")} @ ${p.head ?? "-"}  ${safe(flags.join(" · "))}`);
+      console.log(`${safe(p.name).padEnd(20)} ${safe(p.branch ?? "")} @ ${p.head ?? "-"}  ${safe(flags.join(" Â· "))}`);
     }
     if (rows.some((p) => p.ok && !p.integrity)) process.exitCode = 2;
   });
