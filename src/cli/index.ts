@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { Command } from "commander";
 import {
   addNote,
@@ -46,7 +46,12 @@ import {
   verifyAnchor,
   verifyProject,
   autostartStatus,
+  buildExport,
+  checkExport,
   createAnchor,
+  formatExportMarkdown,
+  formatLogLine,
+  listEvents,
   deinitProject,
   formatDoctor,
   runDoctor,
@@ -614,11 +619,63 @@ program
   });
 
 program
+  .command("log")
+  .description("Show recent events from the evidence log")
+  .option("-n, --limit <n>", "how many of the newest events (default 20)", "20")
+  .option("--type <type>", "only this event type; * is a wildcard, e.g. test.*")
+  .option("--provenance <p>", "only verified, reported or inferred")
+  .option("--after <id>", "only events after this id")
+  .option("--json", "output JSON")
+  .action(async (opts: { limit: string; type?: string; provenance?: string; after?: string; json?: boolean }) => {
+    const rows = await listEvents(process.cwd(), {
+      limit: Number(opts.limit),
+      ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.provenance !== undefined ? { provenance: opts.provenance as "verified" } : {}),
+      ...(opts.after !== undefined ? { afterId: Number(opts.after) } : {}),
+    });
+    if (opts.json) console.log(JSON.stringify(rows, null, 2));
+    else if (rows.length === 0) console.log("No events.");
+    else for (const e of rows) console.log(safeText(formatLogLine(e)));
+  });
+
+program
+  .command("export")
+  .description("Write the evidence log as an audit trail (JSON or Markdown) that can be checked without pcskit")
+  .option("--format <fmt>", "json or md (default json)", "json")
+  .option("-o, --out <file>", "write to a file instead of stdout")
+  .option("--from <id>", "first event id to include")
+  .option("--to <id>", "last event id to include")
+  .option("--check <file>", "re-check a JSON export file instead of exporting")
+  .action(async (opts: { format: string; out?: string; from?: string; to?: string; check?: string }) => {
+    if (opts.check) {
+      const r = checkExport(readFileSync(opts.check, "utf8"));
+      if (r.ok) console.log(`Export OK: ${r.events} events${r.partial ? " (partial export)" : ""} chain correctly.`);
+      else {
+        console.error(`Export check FAILED${r.brokenAt !== undefined ? ` at #${r.brokenAt}` : ""}: ${r.reason}`);
+        process.exitCode = 2;
+      }
+      return;
+    }
+    if (opts.format !== "json" && opts.format !== "md") throw new PcsError("INVALID_INPUT", "--format must be json or md.");
+    const x = await buildExport(process.cwd(), {
+      ...(opts.from !== undefined ? { from: Number(opts.from) } : {}),
+      ...(opts.to !== undefined ? { to: Number(opts.to) } : {}),
+    });
+    const text = opts.format === "md" ? formatExportMarkdown(x) : `${JSON.stringify(x, null, 2)}\n`;
+    if (opts.out) {
+      writeFileSync(opts.out, text, { mode: 0o600 });
+      console.log(`Wrote ${x.events.length} events to ${safe(opts.out)}${x.integrity.ok ? "" : " (the log FAILED its integrity check; see the file)"}.`);
+    } else process.stdout.write(text);
+    if (!x.integrity.ok) process.exitCode = 2;
+  });
+
+program
   .command("doctor")
   .description("Check the environment and this project, and say how to fix what is wrong")
   .option("--json", "output JSON")
-  .action(async (opts: { json?: boolean }) => {
-    const r = await runDoctor(process.cwd());
+  .option("--fix", "also restrict .pcs to your user when it is open to others")
+  .action(async (opts: { json?: boolean; fix?: boolean }) => {
+    const r = await runDoctor(process.cwd(), {}, { fix: opts.fix === true });
     console.log(opts.json ? JSON.stringify(r, null, 2) : safeText(formatDoctor(r)));
     if (!r.ok) process.exitCode = 1;
   });

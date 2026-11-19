@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { isOwnerOnly, secureDir } from "./acl";
 import { claudeHooksStatus } from "./agents";
 import { autostartStatus, type AutostartEnv } from "./autostart";
 import { loadPolicy } from "./config";
@@ -49,7 +50,7 @@ export function nodeVersionOk(version: string): boolean {
  * Diagnose the environment and the current project. Read-only apart from what opening the database already does
  * (schema migration). Never prints project content.
  */
-export async function runDoctor(cwd: string, env: AutostartEnv = {}): Promise<DoctorReport> {
+export async function runDoctor(cwd: string, env: AutostartEnv = {}, opts: { fix?: boolean } = {}): Promise<DoctorReport> {
   const checks: Check[] = [];
   const add = (c: Check) => void checks.push(c);
 
@@ -120,15 +121,16 @@ export async function runDoctor(cwd: string, env: AutostartEnv = {}): Promise<Do
       : { id: "ignored", status: "warn", title: ".pcs/ is not ignored by git, so it could be committed", fix: "Add `.pcs/` to .gitignore (pcs init normally adds it to .git/info/exclude)." },
   );
 
-  if (process.platform !== "win32") {
-    const loose = [pcsDir(root), dbPath(root)].filter((p) => existsSync(p) && (statSync(p).mode & 0o077) !== 0);
+  {
+    let fixed = false;
+    if (opts.fix === true && !isOwnerOnly(pcsDir(root))) fixed = secureDir(pcsDir(root));
+    const fix = process.platform === "win32" ? "pcs doctor --fix" : "pcs doctor --fix (or chmod -R go-rwx .pcs)";
     add(
-      loose.length === 0
-        ? { id: "permissions", status: "ok", title: ".pcs permissions are owner-only" }
-        : { id: "permissions", status: "warn", title: ".pcs is readable by other users", fix: "chmod -R go-rwx .pcs" },
+      isOwnerOnly(pcsDir(root))
+        ? { id: "permissions", status: "ok", title: fixed ? ".pcs access restricted to you (fixed)" : ".pcs is accessible to you only" }
+        : { id: "permissions", status: "warn", title: ".pcs may be readable by other users", fix },
     );
   }
-
   try {
     const policy = loadPolicy(root);
     add({ id: "config", status: "ok", title: policy.sources.length === 0 ? "No config files (defaults)" : `Config OK (${policy.sources.length} file${policy.sources.length === 1 ? "" : "s"})` });

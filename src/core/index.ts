@@ -25,3 +25,5 @@ export * from "./config";
 export * from "./autostart";
 export * from "./doctor";
 export * from "./deinit";
+export * from "./acl";
+export * from "./audit";
