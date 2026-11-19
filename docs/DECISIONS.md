@@ -109,3 +109,13 @@ Short record of architecture and security decisions. Add an entry when you decid
 - An invalid file fails loudly (INVALID_INPUT with the file and key), never silently ignored. Patterns that match empty text or are not valid regexes are rejected. Custom regexes are not checked for catastrophic backtracking; they are the operator's own.
 - The allowlist is enforced in the core (`runTest`), so it covers both `pcs test` and the MCP `pcs_test` tool. Policy is loaded whenever a project is opened and re-read when the file changes.
 - `pcs mcp --read-only` registers only tools annotated read-only (status, verify, task/note/evidence lists, workspace status). Write tools, `pcs_resume` (it starts a session) and `pcs_test` are not registered at all, even with `--allow-test`.
+
+## Watcher autostart
+
+- `pcs autostart install|uninstall|status` starts `pcs watch --project <root>` at login, one entry per project, named `pcskit-watch-<folder>-<hash of the path>`. It uses each OS's own per-user mechanism, so no admin rights and nothing global:
+  - Windows: a value under `HKCU\...\CurrentVersion\Run` that runs `conhost.exe --headless node cli.js watch ...` (no console window). Task Scheduler's logon trigger was tried first and needs admin ("Access is denied"), so it is not used.
+  - Linux: a systemd user unit (`~/.config/systemd/user`), enabled with `--now`. It only runs while the user is logged in unless `loginctl enable-linger` is set; the install output says so.
+  - macOS: a launchd agent in `~/Library/LaunchAgents`, loaded with `launchctl bootstrap`.
+- Paths containing quotes or newlines are refused. systemd `%`, `$` and backslashes and XML characters are escaped.
+- Uninstall removes the entry and asks a running watcher to stop; it is safe when nothing is installed.
+- Verified live on Windows (install, watcher running, uninstall). The Linux and macOS entries are covered by generator and command-sequence tests with a fake executor; they have not been run on real systems yet (CI runs Linux, macOS CI arrives in P1-7).

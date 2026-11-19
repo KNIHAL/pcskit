@@ -45,7 +45,10 @@ import {
   updateTask,
   verifyAnchor,
   verifyProject,
+  autostartStatus,
   createAnchor,
+  installAutostart,
+  uninstallAutostart,
   describePolicy,
   initConfig,
   requireInitializedRoot,
@@ -564,8 +567,9 @@ program
   .option("--status", "show whether a watcher is running")
   .option("--debounce <seconds>", "quiet time before a snapshot is taken (default 2)")
   .option("--stalled <minutes>", "report a stalled session after this much inactivity (default 10)")
-  .action(async (opts: { stop?: boolean; status?: boolean; debounce?: string; stalled?: string }) => {
-    const cwd = process.cwd();
+  .option("--project <dir>", "project directory (default: the current directory); used by the autostart entry")
+  .action(async (opts: { stop?: boolean; status?: boolean; debounce?: string; stalled?: string; project?: string }) => {
+    const cwd = opts.project ?? process.cwd();
     if (opts.status) {
       const s = await watcherState(cwd);
       console.log(
@@ -601,6 +605,32 @@ program
     await w.ready;
     console.log("Press Ctrl+C or run `pcs watch --stop` to stop.");
     await w.done;
+  });
+
+const autostart = program.command("autostart").description("Start the watcher automatically at login (Task Scheduler, systemd user unit or launchd agent)");
+
+autostart
+  .command("install")
+  .description("Run `pcs watch` for this project at every login, and start it now")
+  .action(async () => {
+    const r = await installAutostart(process.cwd());
+    console.log(`Installed ${r.name} (${r.platform}${r.file ? `, ${safe(r.file)}` : ""}).${r.note ? ` ${r.note}` : ""}`);
+  });
+
+autostart
+  .command("uninstall")
+  .description("Remove the login entry for this project and stop its watcher")
+  .action(async () => {
+    const r = await uninstallAutostart(process.cwd());
+    console.log(r.removed ? `Removed ${r.name}.` : `Nothing to remove (${r.name} was not installed).`);
+  });
+
+autostart
+  .command("status")
+  .description("Show whether the login entry for this project is installed")
+  .action(async () => {
+    const r = await autostartStatus(process.cwd());
+    console.log(`${r.installed ? "Installed" : "Not installed"}: ${r.name} (${r.platform}).`);
   });
 
 const workspace = program.command("workspace").description("Work across several projects: each keeps its own .pcs, this only lists them");
