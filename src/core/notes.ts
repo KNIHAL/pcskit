@@ -1,4 +1,5 @@
-import { withDb } from "./context";
+import { loadPolicy } from "./config";
+import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent } from "./events";
@@ -87,10 +88,12 @@ export async function addNote(cwd: string, kind: string, text: string, source?: 
   if (!isNoteKind(kind)) {
     throw new PcsError("INVALID_INPUT", `Invalid note kind "${kind}". Use: ${NOTE_KINDS.join(", ")}.`);
   }
+  const policy = loadPolicy(await requireInitializedRoot(cwd));
   const clean = redactText(text.trim()).text;
   if (!clean) throw new PcsError("INVALID_INPUT", "Note text is empty.");
-  if (clean.length > MAX_NOTE_TEXT) {
-    throw new PcsError("INVALID_INPUT", `Note is longer than ${MAX_NOTE_TEXT} characters.`);
+  const maxChars = Math.min(MAX_NOTE_TEXT, policy.maxNoteChars);
+  if (clean.length > maxChars) {
+    throw new PcsError("INVALID_INPUT", `Note is longer than ${maxChars} characters.`);
   }
   return withDb(cwd, (db) =>
     inTransaction(db, () => {

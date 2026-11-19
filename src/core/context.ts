@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { loadPolicy } from "./config";
 import { dbPath, openDb, type Db } from "./db";
 import { PcsError } from "./errors";
 import { findGitRoot } from "./git";
@@ -10,6 +11,7 @@ export async function requireInitializedRoot(cwd: string): Promise<string> {
   if (!existsSync(dbPath(root))) {
     throw new PcsError("NOT_INITIALIZED", "PCS is not initialized here. Run `pcs init` first.");
   }
+  loadPolicy(root);
   return root;
 }
 
