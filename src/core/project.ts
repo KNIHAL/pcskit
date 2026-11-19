@@ -1,7 +1,8 @@
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { secureDir } from "./acl";
 import { basename, join } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
-import { inTransaction, openDb, PCS_DIR, type Db } from "./db";
+import { inTransaction, openDb, PCS_DIR, pcsDir, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent, recentEvents, type ChainReport, type EventRow } from "./events";
 import { findGitRoot, getGitState, type GitState } from "./git";
@@ -58,6 +59,10 @@ export async function initProject(cwd: string): Promise<InitResult> {
   const root = await findGitRoot(cwd);
   if (!root) throw new PcsError("NOT_GIT_REPO", "Not inside a git repository. Run `git init` first.");
 
+  if (!existsSync(pcsDir(root))) {
+    mkdirSync(pcsDir(root), { recursive: true, mode: 0o700 });
+    secureDir(pcsDir(root)); // new files inherit owner-only access (Windows ACL; POSIX modes are set by openDb)
+  }
   const db = openDb(root);
   try {
     const existing = readProject(db);
