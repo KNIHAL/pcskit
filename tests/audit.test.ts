@@ -219,6 +219,16 @@ describe(".pcs access", () => {
     expect(existsSync(d)).toBe(false);
   });
 
+  it.skipIf(process.platform === "win32")("a closed folder counts as owner-only even if a file inside is 0644", () => {
+    const d = join(dir, "closed");
+    mkdirSync(d, { mode: 0o700 });
+    writeFileSync(join(d, "f"), "x", { mode: 0o644 });
+    chmodSync(d, 0o700);
+    expect(isOwnerOnly(d)).toBe(true);
+    chmodSync(d, 0o750);
+    expect(isOwnerOnly(d)).toBe(false);
+  });
+
   it("secureDir on a missing folder reports false", () => {
     expect(secureDir(join(dir, "nope"))).toBe(false);
     mkdirSync(join(dir, "ok"));

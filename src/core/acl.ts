@@ -80,11 +80,9 @@ export function secureDir(dir: string, platform: NodeJS.Platform = process.platf
 export function isOwnerOnly(dir: string, platform: NodeJS.Platform = process.platform): boolean {
   if (!existsSync(dir)) return true;
   if (platform !== "win32") {
-    let ok = true;
-    walk(dir, (p) => {
-      if ((statSync(p).mode & 0o077) !== 0) ok = false;
-    });
-    return ok;
+    // A folder closed to group and others (0700) cannot be entered, so what is inside is unreachable whatever the
+    // file modes say (files created later get the default 0644).
+    return (statSync(dir).mode & 0o077) === 0;
   }
   try {
     return !hasInheritedAces(icacls([dir]));
