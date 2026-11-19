@@ -23,3 +23,5 @@ export * from "./agents";
 export * from "./anchor";
 export * from "./config";
 export * from "./autostart";
+export * from "./doctor";
+export * from "./deinit";

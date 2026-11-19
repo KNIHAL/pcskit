@@ -6,7 +6,21 @@ import { PcsError } from "./errors";
 import { MIGRATIONS } from "./migrations";
 
 // Loaded via require: esbuild strips the "node:" prefix from "node:sqlite" in bundles.
-const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+// Node 22 prints "ExperimentalWarning: SQLite is an experimental feature" to stderr on load. That is noise for a CLI
+// whose hooks and MCP server run unattended, so exactly that one warning is dropped; all others pass through.
+const { DatabaseSync } = (() => {
+  const original = process.emitWarning;
+  process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
+    const text = typeof warning === "string" ? warning : warning.message;
+    if (/SQLite is an experimental feature/i.test(text)) return;
+    return (original as (...a: unknown[]) => void).call(process, warning, ...rest);
+  }) as typeof process.emitWarning;
+  try {
+    return createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+  } finally {
+    process.emitWarning = original;
+  }
+})();
 
 export const PCS_DIR = ".pcs";
 export const DB_FILE = "pcs.db";
