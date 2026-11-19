@@ -39,6 +39,13 @@ const ASSIGNMENT = new RegExp(
 /** A secret passed as the next argument: `--token abc123`, `--api-key abc123`. */
 const CLI_FLAG = /(--[a-z0-9-]*(?:password|passwd|secret|token|api-?key)[a-z0-9-]*)(\s+)(?!-)[^\s]{6,}/gi;
 
+/** Extra rules from policy files, per project root. They only add to the built-in rules (see config.ts). */
+const policyRules = new Map<string, { rules: ReadonlyArray<readonly [string, RegExp]>; sensitive: readonly RegExp[] }>();
+export function registerPolicyRules(root: string, rules: ReadonlyArray<readonly [string, RegExp]>, sensitive: readonly RegExp[]): void {
+  if (rules.length === 0 && sensitive.length === 0) policyRules.delete(root);
+  else policyRules.set(root, { rules, sensitive });
+}
+
 export interface RedactionResult {
   text: string;
   count: number;
@@ -47,7 +54,9 @@ export interface RedactionResult {
 export function redactText(input: string): RedactionResult {
   let count = 0;
   let text = input;
-  for (const [kind, pattern] of RULES) {
+  const all: Array<readonly [string, RegExp]> = [...RULES];
+  for (const p of policyRules.values()) all.push(...p.rules);
+  for (const [kind, pattern] of all) {
     text = text.replace(pattern, () => {
       count++;
       return `[REDACTED:${kind}]`;
@@ -107,6 +116,8 @@ const SENSITIVE_NAMES = new Set([
 export function isSensitivePath(path: string): boolean {
   const name = (path.split(/[\\/]/).pop() ?? "").toLowerCase();
   if (!name) return false;
+  const norm = path.replace(/\\/g, "/");
+  for (const p of policyRules.values()) if (p.sensitive.some((re) => re.test(norm))) return true;
   if (name === ".env") return true;
   if (name.startsWith(".env.") && !/\.(example|sample|template|dist)$/.test(name)) return true;
   if (/\.(pem|key|p12|pfx|jks|keystore|kdbx|tfvars)$/.test(name)) return true;

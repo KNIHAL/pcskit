@@ -21,3 +21,4 @@ export * from "./workspace";
 export * from "./hooks";
 export * from "./agents";
 export * from "./anchor";
+export * from "./config";

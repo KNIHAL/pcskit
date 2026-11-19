@@ -100,3 +100,12 @@ Short record of architecture and security decisions. Add an entry when you decid
 - `pcs verify --anchor <file>` runs the full integrity check, then checks the signature, that the key is this machine's, and that the anchored event still exists with the same hash and count. This catches truncation of the newest events and a full recomputed rewrite, which the hash chain alone cannot.
 - Keep the anchor file outside the project (another disk, a commit, a ticket). Local only: no network. Anchors are not rotated; a lost key means old anchors can no longer be trusted by `verify`.
 - Creating an anchor on a log that already fails verification is refused.
+
+## Config and policy
+
+- Two optional JSON files: global (`~/.pcs/config.json`, or `PCS_HOME`) and project (`.pcs/config.json`). `pcs config show|init` inspects and scaffolds them.
+- Every setting can only tighten the defaults: extra redaction patterns, extra sensitive path globs, a `test.allow` command-prefix allowlist, and lower caps for note length and stored test output. Nothing can switch a built-in protection off, and caps cannot exceed the defaults.
+- With both files present, redaction and sensitive rules are unioned and a command must pass BOTH allowlists. The project file sits where an agent could edit it, so rules that must hold belong in the global file.
+- An invalid file fails loudly (INVALID_INPUT with the file and key), never silently ignored. Patterns that match empty text or are not valid regexes are rejected. Custom regexes are not checked for catastrophic backtracking; they are the operator's own.
+- The allowlist is enforced in the core (`runTest`), so it covers both `pcs test` and the MCP `pcs_test` tool. Policy is loaded whenever a project is opened and re-read when the file changes.
+- `pcs mcp --read-only` registers only tools annotated read-only (status, verify, task/note/evidence lists, workspace status). Write tools, `pcs_resume` (it starts a session) and `pcs_test` are not registered at all, even with `--allow-test`.

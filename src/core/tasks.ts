@@ -1,4 +1,4 @@
-import { withDb } from "./context";
+import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, type Db } from "./db";
 import { PcsError } from "./errors";
 import { insertEvent } from "./events";
@@ -40,6 +40,7 @@ export function resolveSource(db: Db, explicit: string | undefined): { source: s
 }
 
 export async function addTask(cwd: string, title: string, source?: string): Promise<Task> {
+  await requireInitializedRoot(cwd);
   const clean = redactText(title.trim()).text;
   if (!clean) throw new PcsError("INVALID_INPUT", "Task title is empty.");
   if (clean.length > MAX_TITLE) throw new PcsError("INVALID_INPUT", `Task title is longer than ${MAX_TITLE} characters.`);
@@ -69,6 +70,7 @@ export async function updateTask(
     throw new PcsError("INVALID_INPUT", `Invalid status "${change.status}". Use: ${TASK_STATUSES.join(", ")}.`);
   }
   const status = change.status;
+  await requireInitializedRoot(cwd);
   const note = change.note ? redactText(change.note.trim()).text.slice(0, MAX_NOTE) : undefined;
 
   return withDb(cwd, (db) =>

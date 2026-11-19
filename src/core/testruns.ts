@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
+import { isCommandAllowed, loadPolicy } from "./config";
 import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, type Db } from "./db";
 import { PcsError } from "./errors";
@@ -257,6 +258,10 @@ export async function runTest(cwd: string, argvIn: readonly string[], opts: RunT
   const agent = opts.agent === undefined ? undefined : validateAgentName(opts.agent);
 
   const root = await requireInitializedRoot(cwd);
+  const policy = loadPolicy(root);
+  if (!isCommandAllowed(policy, argv)) {
+    throw new PcsError("INVALID_INPUT", "This command is not on the project's test allowlist (see `pcs config show`).");
+  }
   const runCwd = resolve(cwd);
   const relCwd = await relativeToRoot(runCwd);
 
@@ -273,7 +278,8 @@ export async function runTest(cwd: string, argvIn: readonly string[], opts: RunT
   const result = await runCommand(argv, { cwd: runCwd, timeoutMs, onOutput: opts.onOutput });
 
   const redacted = redactText(result.tail).text;
-  const output = redacted.length > MAX_OUTPUT_CHARS ? redacted.slice(-MAX_OUTPUT_CHARS) : redacted;
+  const maxOut = Math.min(MAX_OUTPUT_CHARS, policy.maxTestOutputChars);
+  const output = redacted.length > maxOut ? redacted.slice(-maxOut) : redacted;
   const data: RunData = {
     ts,
     session_id: sessionId,
@@ -285,7 +291,7 @@ export async function runTest(cwd: string, argvIn: readonly string[], opts: RunT
     duration_ms: result.durationMs,
     output,
     output_bytes: result.totalBytes,
-    output_truncated: result.totalChars > result.tail.length || redacted.length > MAX_OUTPUT_CHARS,
+    output_truncated: result.totalChars > result.tail.length || redacted.length > maxOut,
     head: observation.ok ? observation.data.head : null,
     tree_fingerprint: observation.ok ? fingerprintOf(observation.data) : null,
   };

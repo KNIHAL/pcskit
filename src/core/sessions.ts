@@ -99,8 +99,8 @@ export async function endSession(cwd: string, opts: { reason?: string; note?: st
   if (!(END_REASONS as readonly string[]).includes(reason)) {
     throw new PcsError("INVALID_INPUT", `Invalid reason "${reason}". Use: ${END_REASONS.join(", ")}.`);
   }
-  const note = opts.note ? redactText(opts.note.trim()).text.slice(0, MAX_NOTE) : undefined;
   const root = await requireInitializedRoot(cwd);
+  const note = opts.note ? redactText(opts.note.trim()).text.slice(0, MAX_NOTE) : undefined;
 
   const noActive = () =>
     new PcsError("INVALID_INPUT", "No active session. Start one with `pcs session start --agent <name>`.");

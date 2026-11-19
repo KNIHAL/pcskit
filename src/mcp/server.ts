@@ -36,6 +36,8 @@ export interface McpOptions {
   /** Serve every registered workspace project (tools take a `project` argument) instead of just `project`. */
   workspace?: boolean | undefined;
   /** Expose `pcs_test`, which runs a command on this machine. Off unless the operator turns it on. */
+  /** Expose only tools that cannot change anything (no sessions, notes, tasks, handoffs, snapshots or commands). */
+  readOnly?: boolean | undefined;
   allowTest?: boolean | undefined;
 }
 
@@ -153,6 +155,13 @@ export function createMcpServer(options: McpOptions): McpServer {
 
   const read = { readOnlyHint: true, openWorldHint: false } as const;
   const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
+
+  // --read-only: tools that can change anything are never registered, so the agent cannot even see them.
+  if (options.readOnly === true) {
+    const register = server.registerTool.bind(server) as (...a: unknown[]) => unknown;
+    (server as unknown as { registerTool: unknown }).registerTool = (n: string, cfg: { annotations?: { readOnlyHint?: boolean } }, cb: unknown) =>
+      cfg.annotations?.readOnlyHint === true ? register(n, cfg, cb) : undefined;
+  }
 
   server.registerTool(
     "pcs_status",
@@ -315,7 +324,7 @@ export function createMcpServer(options: McpOptions): McpServer {
     );
   }
 
-  if (options.allowTest === true) {
+  if (options.allowTest === true && options.readOnly !== true) {
     server.registerTool(
       "pcs_test",
       {

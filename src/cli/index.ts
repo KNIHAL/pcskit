@@ -46,6 +46,9 @@ import {
   verifyAnchor,
   verifyProject,
   createAnchor,
+  describePolicy,
+  initConfig,
+  requireInitializedRoot,
   type ChainReport,
   type Session,
   type Snapshot,
@@ -212,6 +215,28 @@ program
       console.error(integrityLine(r));
       process.exitCode = 2;
     }
+  });
+
+const config = program.command("config").description("Policy: extra redaction, sensitive paths, test allowlist, caps");
+
+config
+  .command("show")
+  .description("Show the effective policy and which config files are in use")
+  .action(async () => {
+    const root = await requireInitializedRoot(process.cwd());
+    const d = describePolicy(root);
+    console.log(`Global config:  ${d.files.global}${d.sources.includes(d.files.global) ? "" : " (none)"}`);
+    console.log(`Project config: ${d.files.project}${d.sources.includes(d.files.project) ? "" : " (none)"}`);
+    console.log(`Test allowlist: ${d.policy.testAllow.length === 0 ? "none (any command)" : d.policy.testAllow.map((l) => l.map((t) => t.join(" ")).join(", ")).join("  AND  ")}`);
+    console.log(`Caps: note ${d.policy.maxNoteChars} chars, test output ${d.policy.maxTestOutputChars} chars`);
+  });
+
+config
+  .command("init")
+  .description("Write a sample .pcs/config.json to edit")
+  .action(async () => {
+    const root = await requireInitializedRoot(process.cwd());
+    console.log(`Wrote ${initConfig(root)}`);
   });
 
 program
@@ -654,7 +679,8 @@ program
   .option("--agent <name>", "default agent name recorded on writes")
   .option("--workspace", "serve every project registered with `pcs workspace add` (tools take a `project` argument)")
   .option("--allow-test", "also expose pcs_test, which runs commands on this machine (off by default)")
-  .action(async (opts: { project?: string; agent?: string; allowTest?: boolean; workspace?: boolean }) => {
+  .option("--read-only", "expose only tools that cannot change anything (status, verify, lists); overrides --allow-test")
+  .action(async (opts: { project?: string; agent?: string; allowTest?: boolean; workspace?: boolean; readOnly?: boolean }) => {
     const project = opts.project ?? process.cwd();
     if (!opts.workspace) await getStatus(project); // fail early (to stderr) if this is not an initialized PCS project
     const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
@@ -662,11 +688,12 @@ program
     const server = createMcpServer({
       project,
       ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
-      ...(opts.allowTest ? { allowTest: true } : {}),
+      ...(opts.allowTest && !opts.readOnly ? { allowTest: true } : {}),
+      ...(opts.readOnly ? { readOnly: true } : {}),
       ...(opts.workspace ? { workspace: true } : {}),
     });
     await server.connect(new StdioServerTransport());
-    console.error(`pcs mcp: serving ${safe(project)}${opts.allowTest ? " (pcs_test enabled)" : ""}`);
+    console.error(`pcs mcp: serving ${safe(project)}${opts.readOnly ? " (read-only)" : opts.allowTest ? " (pcs_test enabled)" : ""}`);
   });
 
 /** Read the hook's JSON from stdin without ever hanging the agent: size and time are capped. */
