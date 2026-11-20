@@ -23,6 +23,8 @@ const { DatabaseSync } = (() => {
 })();
 
 export const PCS_DIR = ".pcs";
+/** How long a writer waits for another process to release the database before giving up. */
+export const BUSY_TIMEOUT_MS = 15_000;
 export const DB_FILE = "pcs.db";
 
 export type Db = DatabaseSyncType;
@@ -82,7 +84,10 @@ export function openDb(root: string): Db {
   const file = dbPath(root);
   const db = new DatabaseSync(file);
   try {
-    db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    // The timeout must be set BEFORE anything that takes a lock: switching to WAL (and migrating) already needs one,
+    // and with several agents opening the same project at once an unprotected first statement fails "database is locked".
+    db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    db.exec("PRAGMA journal_mode = WAL");
     migrate(db);
   } catch (err) {
     db.close();
