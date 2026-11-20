@@ -5,7 +5,7 @@ Thanks for helping. PCS is small on purpose: a local-first tool that hands work 
 ## Before you start
 
 - Bugs and small fixes: open a PR directly.
-- New features: open an issue first so we can agree the scope. Read the non-goals in `docs/STATUS.md`; things like cross-machine sync, a central server or a GUI are out of scope for v1.
+- New features: open an issue first so we can agree the scope. Out of scope for v1: cross-machine sync, a central server, database pruning or archiving, importing other tools' sessions, and a GUI beyond the read-only dashboard.
 - Security problems: do not open an issue, see `SECURITY.md`.
 
 ## Setup
