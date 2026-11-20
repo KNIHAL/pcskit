@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { isOwnerOnly, secureDir } from "./acl";
 import { claudeHooksStatus } from "./agents";
 import { autostartStatus, type AutostartEnv } from "./autostart";

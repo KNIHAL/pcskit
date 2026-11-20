@@ -203,6 +203,7 @@ describe("workspace: dashboard", () => {
     try {
       const get = async (path: string) => {
         const r = await fetch(`http://127.0.0.1:${d.port}${path}`, { headers: { cookie: `pcs_dash=${d.token}` } });
+        // biome-ignore lint/suspicious/noExplicitAny: test helper that returns arbitrary JSON
         return { status: r.status, body: (await r.json()) as any };
       };
       const projects = await get("/api/projects");

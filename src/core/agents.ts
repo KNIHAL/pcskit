@@ -233,7 +233,6 @@ const TARGET_FILE: Record<AgentTarget, string> = {
   cursor: join(".cursor", "rules", "pcs.mdc"),
 };
 const BEGIN = "<!-- pcs:begin -->";
-const END = "<!-- pcs:end -->";
 const BLOCK_RE = /<!-- pcs:begin -->[\s\S]*?<!-- pcs:end -->/;
 const CURSOR_FRONTMATTER = ["---", "description: PCS project continuity", "alwaysApply: true", "---"];
 

@@ -231,7 +231,7 @@ export function runCommand(argv: readonly string[], opts: RunOptions): Promise<R
     const MAX_PENDING = 4096;
     const forward = (stream: "stdout" | "stderr", flushAll: boolean): void => {
       if (!opts.onOutput) return;
-      let buf = pending[stream];
+      const buf = pending[stream];
       let cut = buf.lastIndexOf("\n") + 1;
       if (flushAll || buf.length - cut > MAX_PENDING) cut = buf.length;
       if (cut === 0) return;

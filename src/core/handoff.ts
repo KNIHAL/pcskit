@@ -538,7 +538,7 @@ export function renderHandoff(h: Handoff): string {
 
   section("7. Exact next steps");
   if (h.nextSteps.length === 0) L.push('(none recorded. The stopping agent or the user can add them with `pcs note add next "..."`.)');
-  h.nextSteps.forEach((n, i) => L.push(`${i + 1}. ${tag("reported", n.source)} ${code(n.text, MAX_NOTE_SHOWN)} (note #${n.id})`));
+  for (const [i, n] of h.nextSteps.entries()) L.push(`${i + 1}. ${tag("reported", n.source)} ${code(n.text, MAX_NOTE_SHOWN)} (note #${n.id})`);
 
   section("8. Do not touch");
   if (h.doNotTouch.notes.length === 0 && h.doNotTouch.sensitiveFiles.length === 0) L.push("(nothing recorded)");
