@@ -1,5 +1,5 @@
 {
-  "name": "pcskit",
+  "name": "@knihal/pcskit",
   "version": "0.1.0",
   "description": "Project Continuity System - AI-independent development continuity and handoff",
   "license": "Apache-2.0",
