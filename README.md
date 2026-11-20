@@ -3,7 +3,7 @@
 **Your AI agent stopped. The next one picks up exactly where it left off.**
 
 [![CI](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml/badge.svg)](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/pcskit)](https://www.npmjs.com/package/pcskit)
+[![npm](https://img.shields.io/npm/v/@knihal/pcskit)](https://www.npmjs.com/package/@knihal/pcskit)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.13-339933)](package.json)
 
@@ -30,7 +30,7 @@ A task counts as verified only when a passing test run that PCS executed is link
 You need Node.js 22.13 or newer and git.
 
 ```
-npm install -g pcskit
+npm install -g @knihal/pcskit
 cd your-repo
 pcs init
 ```
