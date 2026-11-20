@@ -19,5 +19,5 @@ body:
     attributes:
       label: Scope check
       options:
-        - label: I read the non-goals in docs/STATUS.md (no cross-machine sync, central server or GUI in v1)
+        - label: I checked CONTRIBUTING.md: this is not cross-machine sync, a central server or a GUI
           required: true

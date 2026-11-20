@@ -2,7 +2,7 @@
 
 Local-first, AI-independent continuity for software projects. When an AI agent stops mid-task (token limit, new session, switching providers), PCS reconstructs the real project state from git and recorded evidence so the next agent can continue.
 
-Status and roadmap: [docs/STATUS.md](docs/STATUS.md). Rules for AI agents: [AGENTS.md](AGENTS.md). Decisions and security model: [docs/DECISIONS.md](docs/DECISIONS.md).
+Rules for AI agents: [AGENTS.md](AGENTS.md). Decisions and security model: [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Requirements
 Node.js >= 22.13, git.
