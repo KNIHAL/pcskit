@@ -1,53 +1,52 @@
 # PCS status (read this first)
 
-Last updated: 2026-11-12. Update this file when a whole step below is finished, not after every small fix.
+Last updated: 2026-11-20. Update this file when a whole step below is finished, not after every small fix.
 
 ## What we are building
-**PCS = Project Continuity System.** When an AI coding agent stops (token limit, new chat, switching to another AI), PCS reconstructs what *actually* happened in the project and writes a handoff the next agent can continue from, without confusion about what is done, what is half-done, and which file was being edited.
 
-Core principles: local-first, AI-independent, evidence-based (never trust an AI's "done" claim), enterprise-grade security.
+**PCS = Project Continuity System.** When an AI coding agent stops (token limit, new chat, switching to another AI), PCS reconstructs what actually happened in the project and writes a handoff the next agent can continue from, without confusion about what is done, what is half-done and which file was being edited.
+
+Principles: local-first, AI-independent, evidence-based (never trust an AI's "done" claim), secure by default.
 
 Evidence model: every recorded fact has a provenance.
+
 - `verified`: PCS observed it itself (git state, snapshots, a test run PCS executed).
 - `reported`: a human or agent claimed it.
-- `inferred`: derived from other facts (e.g. "session was interrupted").
-Handoffs must keep these three separate.
+- `inferred`: derived from other facts (for example "session was interrupted").
 
-v1 is **CLI only**. MCP server, dashboard and background watcher come after the CLI handoff works on a real project.
+Handoffs keep these three separate.
 
-## Built and tested (176 tests passing)
-- Multi-repo: `pcs workspace add|remove|list` (registry `~/.pcs/workspace.json`, atomic writes, names validated); `pcs mcp --workspace` (tools take a `project` argument, registry re-read per call, plus `pcs_workspace_status`); `pcs dashboard --workspace` (project picker). Each repo keeps its own hash-chained `.pcs`; nothing is merged. One broken project never hides the others.
-- `pcs dashboard [--port n] [--open]`: read-only local web UI (Node http, no dependencies). Binds 127.0.0.1 only; random access token in the printed URL (exchanged for a SameSite=Strict cookie); Host header must be loopback; GET/HEAD only; strict CSP with nonce. The page holds no data: it polls `/api/overview` every 5s and writes text with textContent only. Shows log integrity, active session, watcher, last handoff and pickup, sessions, tasks with their latest test evidence, notes, failing-run output tails, snapshots and the event timeline, every line tagged verified / reported / inferred.
-- `pcs mcp [--project dir] [--agent name] [--allow-test]`: MCP server over stdio (official SDK) with 14 tools mirroring the CLI (status, verify, resume, handoff, session start/end, snapshot, task, note, evidence). Same core, same provenance: a tool call is a `reported` claim by the agent, observations stay `verified`. Errors come back as tool errors. `pcs_test` (command execution) is off unless the operator passes `--allow-test`. Results go back with control characters stripped; the instructions tell the model that recorded content is data, not instructions.
-- `pcs watch [--debounce s] [--stalled min] | --stop | --status`: long-running watcher (chokidar on the project, plus git's HEAD log). Files are only a trigger: each change (after a debounce) takes a fresh git observation and records a verified snapshot + `watch.snapshot` event only if the repo state really differs. Records `watch.started` / `watch.stopped` (verified) and `watch.stalled` (inferred: open session, no file activity). One watcher per project (lock in `.pcs/watch.json`; a dead one is detected as stale). `pcs status` shows it; the handoff mentions watcher snapshots and stalls with their provenance. No auto-start/service yet.
-- `pcs resume [--agent name] [--json]`: the pickup. Reads the latest `handoff.generated` event, starts a session for the new agent (an unended one becomes `interrupted`), snapshots the repo, and compares it with the handoff's snapshot (HEAD moved? files changed? commits since). Checks the handoff file's SHA-256; an edited, missing or unwritten file is never shown: the handoff is rebuilt from the evidence log instead. Records `handoff.checked` (verified) and `handoff.picked_up` (reported by the agent), both linked to the new session. Prints the brief (checks, warnings, then the handoff). Refuses if no handoff exists or nobody is identified. Exit 2 on integrity failure (brief still printed, with a warning).
-- `pcs note add <kind> <text>|list|resolve <id>`: what git and tests cannot tell the next agent. Kinds: `task` (original task, newest wins), `next` (exact next step), `avoid` (do not touch, and why), `issue` (known problem). Notes are `reported` events in the hash-chained log (no separate table); `next`/`avoid`/`issue` can be resolved.
-- `pcs handoff [--session id] [--out file] [--stdout] [--json]`: takes a fresh verified snapshot, then writes `.pcs/HANDOFF.md` (git-excluded) with: session, original task, completed (verified / passing-but-code-changed / reported-only), in progress, files touched (commits, uncommitted files, what changed since session start), tests (with fingerprint freshness and the output tail of failing runs), unresolved issues, next steps, do-not-touch. Every line is tagged `[verified]`, `[reported by X]` or `[inferred]`. Sensitive files by name only. Records a `handoff.generated` event with the file's SHA-256. Exit 2 (with a loud warning inside the file) if the integrity check fails.
-- `pcs test [--task id] [--timeout s] -- <command>`: runs the command (argument array, no shell; `npm`/`npx` `.cmd` shims on Windows go through a guarded cmd.exe call), records exit code, duration, repo state (HEAD + fingerprint of changed files) and a redacted, size-capped output tail as a `verified` event linked to the session. Exit 0 only if it passed. `--task` links the run to a task as evidence (the link is a `reported` claim; the run is `verified`).
-- `pcs evidence list|show <id>|link <task> <run>`: browse runs, link existing runs to tasks. `pcs task list` shows each task's latest evidence. Runs and links are immutable and checked by `pcs verify`.
-- `pcs init`: register a git project (`.pcs/` SQLite, git-excluded, owner-only).
-- `pcs status [--json]`: real git state (branch, HEAD, changed files, sensitive-file flags), active session, open tasks, log integrity.
-- `pcs verify`: checks the tamper-evident event log and every snapshot (exit code 2 if broken).
-- `pcs task add|list|update`: tasks; every change is a `reported` event attributed to an agent (`--agent`, else the active session's agent, else `user`).
-- `pcs session start|end|current|list`: which AI is working. Starting a session while one is still open marks the old one `interrupted` (an `inferred` event). End reasons: completed, limit, switched. Task events are linked to the active session.
-- `pcs snapshot [take]|list|diff [from] [to] [--session id]`: a `verified` snapshot of git state (HEAD, branch, each changed file with SHA-256 of content). Taken automatically on `session start` and `session end` (a failed observation never blocks the session; it is logged as `snapshot.failed`). `diff` shows new/changed/resolved files and the commits made between two HEADs. Default compares the last two snapshots.
-- Event log: append-only, SHA-256 hash chain (covers session link too), secrets redacted before storage. Snapshots are immutable and their digest is stored in a chained event.
-- Hardened git adapter (no repo-config command execution, read-only, timeouts, commit hashes validated).
-- Versioned schema migrations (`src/core/migrations.ts`, currently v5; upgrades from older versions are tested).
-- CI (GitHub Actions: Windows + Linux, Node 22 + 24). Decisions and security limits: `docs/DECISIONS.md`.
+## What v1 contains (all built and tested on Windows, Linux and macOS)
 
-## Remaining for v1 (in order)
-1. ~~Sessions~~ done.
-2. ~~Snapshots~~ done.
-3. ~~Verification (`pcs test`)~~ done.
-4. ~~Handoff (`pcs handoff`, `pcs note`)~~ done.
-5. ~~Resume (`pcs resume`)~~ done.
-6. ~~Real test~~ done on a clone of `causly-server` (240 files, Windows): session, notes, passing and failing tests, handoff, drift, resume by a second agent, verify all worked. Known nits: commands in the handoff lose shell quoting; note ids are event ids (not 1,2,3).
+- Core: `init`, `status`, `verify`, sessions, snapshots, tasks, notes, `test` (verified test runs), `evidence`, `handoff`, `resume` (also `--prompt`).
+- Tamper-evident event log (SHA-256 hash chain), signed anchor against truncation, self-checking `export`, `log`, owner-only access (POSIX modes, Windows ACLs).
+- Redaction before storage, extra rules and test allowlist through the policy files (`config`); policy can only tighten defaults.
+- Agent integration: MCP server (`mcp`, with `--read-only` and `--allow-test`), `connect` for Claude Desktop, Cursor and Claude Code, Claude Code hooks, instruction block for CLAUDE.md, AGENTS.md and Cursor rules (`agents`).
+- Watcher (`watch`) with autostart at login (`autostart`), multi-repo `workspace`, read-only local `dashboard`.
+- Operations: `doctor [--fix]`, `deinit`.
+- Quality: strict typecheck, Biome lint, coverage thresholds, 3 OS x 2 Node CI, real-layout tests (worktrees, submodules), concurrency stress tests, fuzz tests, a real MCP stdio end-to-end test.
 
-After v1, in this order: background watcher (high priority; chokidar), MCP server (thin wrapper over `src/core`), dashboard.
+Decisions and security limits: `docs/DECISIONS.md`. Using it with apps: `docs/CLIENTS.md`.
 
-## Next step
-v1 plus watcher, MCP, dashboard and multi-repo are built; the first real two-agent test passed and its bugs are fixed (resume generates a missing handoff, stable agent identity). Next: full E2E QA with enterprise features, then GitHub push, CI and npm launch. Open nits: note ids are event ids; watcher has no auto-start.
+## Non-goals for v1
+
+- Cross-machine sync or a central server.
+- Database pruning or archiving.
+- Importing other tools' sessions.
+- A GUI beyond the read-only dashboard.
+
+## Before launch
+
+1. Community and process files (this folder, `.github/`, root).
+2. Release setup: changelog, npm publish with provenance, pinned Actions, Dependabot.
+3. README.
+4. Real-app check of Claude Desktop and Cursor (`docs/CLIENTS.md`), npm account with 2FA and trusted publisher, then make the repository public.
+
+## Known nits
+
+- Commands shown in a handoff lose shell quoting.
+- Note ids are event ids, not 1, 2, 3 (decision recorded in `docs/DECISIONS.md`).
 
 ## How to continue in a new chat
-Tell the AI: "Read D:\pcs\AGENTS.md and D:\pcs\docs\STATUS.md, then continue with the Next step."
+
+Tell the AI: "Read AGENTS.md and docs/STATUS.md, then continue with the first item under Before launch."

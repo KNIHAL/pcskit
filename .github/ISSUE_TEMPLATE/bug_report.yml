@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste secrets or private code. For security problems use the Security tab instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. pcs init
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: pcs version
+      description: Output of `pcs --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent or app involved
+      options: [None (CLI only), Claude Code, Claude Desktop, Cursor, Other]
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `pcs doctor`
+      description: Remove anything private first.
+      render: text
