@@ -1,66 +1,139 @@
 # PCS: Project Continuity System
 
-Local-first, AI-independent continuity for software projects. When an AI agent stops mid-task (token limit, new session, switching providers), PCS reconstructs the real project state from git and recorded evidence so the next agent can continue.
+**Your AI agent stopped. The next one picks up exactly where it left off.**
 
-Rules for AI agents: [AGENTS.md](AGENTS.md). Decisions and security model: [docs/DECISIONS.md](docs/DECISIONS.md).
+[![CI](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml/badge.svg)](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/pcskit)](https://www.npmjs.com/package/pcskit)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.13-339933)](package.json)
 
-## Requirements
-Node.js >= 22.13, git.
+PCS is a local-first command line tool and MCP server that hands work from one AI coding agent to the next. When an agent hits a token limit, you start a new chat, or you switch from Claude to Cursor, PCS rebuilds what actually happened in the project from git and recorded evidence, and gives the next agent a brief it can trust.
 
-## Develop
+Never trust an agent's "done". PCS keeps what it saw itself apart from what an agent claimed.
+
+## Why PCS
+
+Agents lose context when a session ends. The usual fix is a summary written by the agent that just ran out of room, which is exactly the part you cannot trust: it may say tests pass when they never ran, or forget the file it was halfway through editing.
+
+PCS records facts with their source, so the next agent knows which lines are solid:
+
+| Level | Meaning | Example |
+| --- | --- | --- |
+| `verified` | PCS observed it itself | git state, file hashes, a test run PCS executed with its exit code |
+| `reported` | A person or agent claimed it | "task done", "next step is X" |
+| `inferred` | Derived from other facts | "the session was interrupted" |
+
+A task counts as verified only when a passing test run that PCS executed is linked to it, and only while the code still matches the state that run saw.
+
+## Quick start
+
+You need Node.js 22.13 or newer and git.
+
 ```
-npm install
-npm run typecheck
-npm test
-npm run build
-node dist/cli.js --help
+npm install -g pcskit
+cd your-repo
+pcs init
 ```
 
-## Commands (v0.1)
-| Command | What it does |
+Connect the agents you use (one command each, `--remove` undoes it):
+
+```
+pcs connect claude-desktop
+pcs connect cursor
+pcs connect claude-code
+```
+
+Tell agents how to use PCS, and for Claude Code let hooks do it automatically:
+
+```
+pcs agents install      # adds a marked block to CLAUDE.md, AGENTS.md, .cursor/rules
+pcs hooks install       # Claude Code: sessions start, checkpoint and end by themselves
+```
+
+Check that everything is in place:
+
+```
+pcs doctor
+```
+
+Details for each app: [docs/CLIENTS.md](docs/CLIENTS.md).
+
+## A handoff, step by step
+
+```
+pcs session start --agent claude
+pcs note add task "Add the --json flag to the exporter"
+pcs test --task <task-id> -- npm test        # PCS runs it and records the result
+pcs note add next "Wire the flag in src/cli/export.ts, then update the tests"
+pcs session end --reason limit
+pcs handoff                                   # writes .pcs/HANDOFF.md
+```
+
+The next agent, in any tool:
+
+```
+pcs resume --agent cursor
+```
+
+Resume checks the handoff against the evidence log, snapshots the repo, warns if the code moved since the handoff, and prints the brief. Every line carries its level: `[verified]`, `[reported by claude]` or `[inferred]`. With MCP connected, agents call `pcs_resume` and `pcs_handoff` themselves. No agent running? `pcs resume --prompt` prints a ready-to-paste takeover prompt.
+
+If an agent died before writing a handoff, PCS builds one from the evidence log and marks the interrupted session as `inferred`.
+
+## What you get
+
+- **Handoffs you can trust.** Original task, completed work (verified, passing-but-code-changed, or reported only), work in progress, files touched, test results with the output of failing runs, open problems, next steps and do-not-touch notes.
+- **Tamper-evident history.** Events are stored in an append-only SHA-256 hash chain. `pcs verify` detects edits, deletions and reordering. A signed anchor kept outside the project also detects truncation and rewrites.
+- **Audit export.** `pcs export` writes the log as JSON or Markdown that can be checked without PCS.
+- **Secrets stay out.** Redaction runs before anything is stored. Files flagged sensitive (keys, `.env`) are listed by name and never read.
+- **Works with your agents.** MCP server for any MCP client, Claude Code hooks, and instruction blocks for CLAUDE.md, AGENTS.md and Cursor rules.
+- **Always on, if you want.** A background watcher snapshots the repo as files change and flags stalled sessions; `pcs autostart install` starts it at login.
+- **Many repos.** `pcs workspace` lists all your projects; each keeps its own log.
+- **Read-only dashboard.** `pcs dashboard` shows sessions, tasks with their evidence, notes, test runs and the event timeline on 127.0.0.1.
+
+## Commands
+
+| Area | Commands |
 | --- | --- |
-| `pcs init` | Register the current git repo (creates git-excluded `.pcs/`) |
-| `pcs status [--json]` | Real git state, active session, open tasks, log integrity |
-| `pcs verify` | Verify the event log and snapshots are untampered (exit 2 if broken) |
-| `pcs session start --agent <name>` | Start a session (an unended one is marked interrupted) and snapshot the repo |
-| `pcs session end [--reason r] [--note t]` | End it (`completed`, `limit`, `switched`) and snapshot the repo |
-| `pcs session current` / `pcs session list` | Show active / recent sessions |
-| `pcs snapshot` | Record a verified snapshot now (git state + content hashes) |
-| `pcs snapshot list` | List snapshots |
-| `pcs snapshot diff [from] [to] [--session id]` | What changed between snapshots, plus commits made in between |
-| `pcs test [--task id] [--timeout s] -- <command>` | Run a command and record the result as verified evidence (optionally linked to a task) |
-| `pcs evidence list` / `show <id>` / `link <task> <run>` | Browse test runs; point a task at a run |
-| `pcs note add <kind> <text>` / `list` / `resolve <id>` | Record the original task (`task`), exact next steps (`next`), do-not-touch (`avoid`) and known problems (`issue`) |
-| `pcs handoff [--session id] [--out file] [--stdout]` | Write `.pcs/HANDOFF.md` for the next agent, with verified / reported / inferred kept apart |
-| `pcs resume [--agent name] [--json]` | Pick up the latest handoff: verify it, snapshot the repo, warn about drift, print the brief and record the pickup |
-| `pcs watch [--debounce s] [--stalled min]` / `--stop` / `--status` | Background watcher: snapshot on file or HEAD changes, infer stalled sessions |
-| `pcs workspace add [path] [--name n]` / `remove <project>` / `list` | Work across several projects: register initialized repos and see all their states in one list (each keeps its own `.pcs`) |
-| `pcs dashboard [--port n] [--open] [--workspace]` | Read-only local web dashboard: sessions, tasks with evidence, notes, test runs, snapshots, timeline (127.0.0.1 only, token in the URL) |
-| `pcs mcp [--project dir] [--workspace] [--agent name] [--allow-test]` | Run PCS as an MCP server (stdio) so agents call the pcs tools themselves |
-| `pcs task add <title> [--agent n]` | Add a task |
-| `pcs task list [--status s]` | List tasks |
-| `pcs task update <id> --status s [--note t] [--agent n]` | Change task status |
+| Setup | `init`, `doctor [--fix]`, `deinit`, `config show\|init`, `connect`, `agents install\|uninstall`, `hooks install\|uninstall\|status`, `autostart install\|uninstall\|status` |
+| Work | `session start\|end\|current\|list`, `task add\|list\|update`, `note add\|list\|resolve`, `snapshot [take\|list\|diff]`, `test -- <command>`, `evidence list\|show\|link` |
+| Handoff | `handoff`, `resume [--prompt]`, `status`, `watch` |
+| Trust | `verify [--anchor]`, `anchor`, `log`, `export` |
+| Many projects | `workspace add\|remove\|list`, `dashboard [--workspace]`, `mcp [--workspace]` |
 
-## Layout
-- `src/core`: all logic (git adapter, SQLite store, events, sessions, snapshots, tasks, redaction)
-- `src/cli`: argument parsing and output only
-- `tests`: vitest suites
+Run `pcs <command> --help` for options. Several commands accept `--json` for scripts.
 
+## MCP tools
 
-## Use PCS from an agent (MCP)
-Add this to the MCP config of Claude Desktop, Cursor or any MCP client (use the real paths):
-```json
-{
-  "mcpServers": {
-    "pcs": {
-      "command": "node",
-      "args": ["D:/pcs/dist/cli.js", "mcp", "--project", "D:/your-project", "--agent", "claude"]
-    }
-  }
-}
-```
-Tools: `pcs_status`, `pcs_verify`, `pcs_resume`, `pcs_handoff`, `pcs_session_start|end`, `pcs_snapshot`, `pcs_task_add|list|update`, `pcs_note_add|list|resolve`, `pcs_evidence_list`. Start with `pcs_resume`. `pcs_test` (runs a command on your machine) exists only with `--allow-test`.
-### Several repos at once
-Run `pcs init` in each repo, then `pcs workspace add` inside each. `pcs workspace list` shows all of them (branch, changes, active agent, last handoff, integrity). Serve them all to an agent with `pcs mcp --workspace --agent claude`: every tool then takes a `project` argument (the names from `pcs_workspace_status`). `pcs dashboard --workspace` adds a project picker. The registry lives in `~/.pcs/workspace.json` (override with `PCS_HOME`).
+Start the server with `pcs mcp` (or let `pcs connect` write the config). Tools: `pcs_status`, `pcs_verify`, `pcs_resume`, `pcs_handoff`, `pcs_session_start`, `pcs_session_end`, `pcs_snapshot`, `pcs_task_add`, `pcs_task_list`, `pcs_task_update`, `pcs_note_add`, `pcs_note_list`, `pcs_note_resolve`, `pcs_evidence_list`, `pcs_workspace_status`. Agents should start with `pcs_resume`.
+
+- `--read-only` exposes only tools that cannot change anything.
+- `pcs_test`, which runs a command on your machine, is off unless you pass `--allow-test`.
+- Recorded content is returned as data, with control characters stripped, and the server instructions tell the model not to follow it.
+
+## Security model
+
+PCS reads repositories and agent output that it does not trust, so it is built defensively.
+
+- Local only: no network access and no telemetry. Data lives in `.pcs/` inside your project, git-excluded and owner-only (POSIX modes, Windows ACLs).
+- Git is run read-only with a hardened adapter: no repo-defined commands, no optional locks, timeouts, validated hashes.
+- Commands are argument arrays, never shell strings. `pcs test` can be limited to an allowlist.
+- Untrusted text is sanitized before it reaches the terminal, markdown or the dashboard.
+- Policy files can only tighten defaults. The global file is the trusted one, because a project file can be edited by an agent.
+
+Honest limits: the hash chain proves changes only if you keep the anchor or an export somewhere else; redaction is pattern based, so add your own rules for your secrets; and `reported` claims are labelled, not proven. Full reasoning is in [docs/DECISIONS.md](docs/DECISIONS.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Platform support
+
+Tested in CI on Linux, Windows and macOS with Node 22 and 24, including git worktrees and submodules, concurrent writers and fuzzed input.
+
+## Uninstall
+
+`pcs deinit` removes everything PCS added to a project: the `.pcs` folder, hooks, instruction blocks and the login entry. `pcs connect <app> --remove` removes the MCP entry.
+
+## Contributing
+
+Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); everyone is expected to follow the [code of conduct](CODE_OF_CONDUCT.md). Rules for AI agents working on this repository are in [AGENTS.md](AGENTS.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
+
 Apache-2.0. See [LICENSE](LICENSE).
