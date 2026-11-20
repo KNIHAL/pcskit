@@ -70,6 +70,13 @@ import {
   type Note,
   type Task,
   type TestRun,
+  CONNECT_CLIENTS,
+  type ConnectClient,
+  clientConfigPath,
+  connectClient,
+  disconnectClient,
+  serverEntry,
+  serverKey,
 } from "../core";
 
 /** Repo-controlled strings (paths, commit subjects, titles) can carry terminal escape sequences. */
@@ -917,6 +924,36 @@ agents
     for (const r of results) console.log(`${r.status.padEnd(11)} ${safe(r.file)}`);
   });
 
+program
+  .command("connect <client>")
+  .description("Register the PCS MCP server in an app's config: claude-desktop, cursor or claude-code")
+  .option("--global", "cursor: use ~/.cursor/mcp.json instead of this project's .cursor/mcp.json")
+  .option("--portable", "write plain `pcs` as the command (needs pcs on the app's PATH) instead of absolute paths")
+  .option("--allow-test", "also expose pcs_test, which runs commands on this machine (off by default)")
+  .option("--read-only", "expose only tools that cannot change anything")
+  .option("--remove", "remove the PCS entry again")
+  .option("--print", "show the entry without writing anything")
+  .action(async (client: string, opts: { global?: boolean; portable?: boolean; allowTest?: boolean; readOnly?: boolean; remove?: boolean; print?: boolean }) => {
+    if (!(CONNECT_CLIENTS as readonly string[]).includes(client)) {
+      throw new PcsError("INVALID_INPUT", `Unknown client "${safe(client)}". Use one of: ${CONNECT_CLIENTS.join(", ")}.`);
+    }
+    const c = client as ConnectClient;
+    const o = {
+      ...(opts.global ? { global: true } : {}),
+      ...(opts.portable ? { portable: true } : {}),
+      ...(opts.allowTest ? { allowTest: true } : {}),
+      ...(opts.readOnly ? { readOnly: true } : {}),
+    };
+    if (opts.print) {
+      const root = await requireInitializedRoot(process.cwd());
+      console.log(JSON.stringify({ mcpServers: { [serverKey(c, root, o)]: serverEntry(root, o) } }, null, 2));
+      console.log(`File: ${safe(clientConfigPath(c, root, o))}`);
+      return;
+    }
+    const r = opts.remove ? await disconnectClient(c, process.cwd(), o) : await connectClient(c, process.cwd(), o);
+    console.log(`${r.status.padEnd(9)} ${safe(r.file)}  (${safe(r.key)})`);
+    if (!opts.remove) console.log(c === "claude-desktop" ? "Restart Claude Desktop fully (quit from the tray), then check that the pcs tools appear." : c === "cursor" ? "Reload Cursor, then open Settings > MCP and check that the server is green." : "Run /mcp in Claude Code and approve the project server.");
+  });
 program.parseAsync().catch((err: unknown) => {
   console.error(`pcs: ${err instanceof Error ? safe(err.message) : "unexpected error"}`);
   process.exit(exitCodeFor(err));

@@ -27,3 +27,4 @@ export * from "./doctor";
 export * from "./deinit";
 export * from "./acl";
 export * from "./audit";
+export * from "./connect";

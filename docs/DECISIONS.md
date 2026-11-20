@@ -148,3 +148,12 @@ Short record of architecture and security decisions. Add an entry when you decid
 
 - Real layouts tested: normal repo, git worktree, submodule, detached HEAD, no commits. Found and fixed: in worktrees/submodules `.git` is a file, so `.pcs/` was not excluded. We now ask git for the path (`rev-parse --git-path info/exclude`).
 - Concurrent writers (several processes appending events at once) found a real "database is locked" bug. Fix: set `busy_timeout` before `journal_mode=WAL` and migrations; writes use `BEGIN IMMEDIATE`.
+
+
+## Connecting apps (pcs connect)
+
+- One command writes the MCP entry for Claude Desktop, Cursor or Claude Code. Other servers in the file are kept; an unparseable file is never overwritten.
+- Default entry is absolute node + script path with `--project`, because GUI apps have no project cwd and often no PATH. `--portable` writes plain `pcs`.
+- `pcs_test` stays off unless `--allow-test`; `--read-only` exposes only read tools.
+- An end-to-end test launches the written command over real MCP stdio. CI now builds before testing so that test runs the real binary.
+- Real-app check is a manual checklist in docs/CLIENTS.md; we cannot drive Claude Desktop or Cursor from CI.

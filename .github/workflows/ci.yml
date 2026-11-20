@@ -30,6 +30,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npx biome lint . --error-on-warnings
+      - run: npm run build
       - name: Test
         if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.node == 24) }}
         run: npm test
@@ -43,7 +44,6 @@ jobs:
           name: coverage
           path: coverage
           retention-days: 14
-      - run: npm run build
       - name: Smoke test the built CLI
         run: node dist/cli.js --version
       - run: npm audit --omit=dev
