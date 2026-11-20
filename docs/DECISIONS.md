@@ -141,4 +141,10 @@ Short record of architecture and security decisions. Add an entry when you decid
 - Lint is Biome (`npm run lint`, recommended rules, warnings fail CI). Formatting is not enforced, so no repo-wide reformat. Two rules are off on purpose: `noControlCharactersInRegex` (redaction and output sanitising match control characters deliberately) and `noNonNullAssertion` (with `noUncheckedIndexedAccess` on, a `!` after a bounds check is the clearest form); `useTemplate` is off in tests, where secrets are built by concatenation so scanners do not flag the test files.
 - Coverage (`npm run test:coverage`, v8) runs on Ubuntu/Node 24 and is uploaded as an artifact. Thresholds sit just under the current numbers (statements 78, branches 66, functions 79, lines 80) so coverage cannot erode silently; they are floors, not goals.
 - Dev dependencies moved to vitest 5 and `esbuild` is pinned to `^0.28.2` through `overrides`, which clears the vitest/tinypool and esbuild advisories: `npm audit` reports 0 vulnerabilities, not only for production.
-- A test checks that every source, test and doc file is valid UTF-8 with no U+FFFD. It was added after lint found `src/dashboard/page.ts` containing two stray Latin-1 bytes (the dashboard's "·" separators rendered as broken characters).
+- A test checks that every source, test and doc file is valid UTF-8 with no U+FFFD. It was added after lint found `src/dashboard/page.ts` containing two stray Latin-1 bytes (the dashboard's "Â·" separators rendered as broken characters).
+
+
+## Robustness tests (layouts, concurrency, fuzz)
+
+- Real layouts tested: normal repo, git worktree, submodule, detached HEAD, no commits. Found and fixed: in worktrees/submodules `.git` is a file, so `.pcs/` was not excluded. We now ask git for the path (`rev-parse --git-path info/exclude`).
+- Concurrent writers (several processes appending events at once) found a real "database is locked" bug. Fix: set `busy_timeout` before `journal_mode=WAL` and migrations; writes use `BEGIN IMMEDIATE`.

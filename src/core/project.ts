@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { secureDir } from "./acl";
-import { basename, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { requireInitializedRoot, withDb } from "./context";
 import { inTransaction, openDb, PCS_DIR, pcsDir, type Db } from "./db";
 import { PcsError } from "./errors";
@@ -38,16 +39,37 @@ function readProject(db: Db): ProjectInfo | undefined {
     | undefined;
 }
 
-/** Keep a path out of the user's repo (`.git/info/exclude`) without touching any tracked file. */
-export function addGitExclude(root: string, line: string): void {
-  const file = join(root, ".git", "info", "exclude");
+/**
+ * Where git reads its per-repository ignore rules. In a linked worktree or a submodule `.git` is a FILE, so the
+ * path is asked from git itself (`--git-path` resolves the shared info directory); the plain layout is the fallback.
+ */
+function excludeFile(root: string): string {
   try {
+    const out = execFileSync("git", ["rev-parse", "--git-path", "info/exclude"], {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 15_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (out) return isAbsolute(out) ? out : join(root, out);
+  } catch {
+    /* fall through to the usual location */
+  }
+  return join(root, ".git", "info", "exclude");
+}
+
+/** Keep a path out of the user's repo (the repository's info/exclude) without touching any tracked file. */
+export function addGitExclude(root: string, line: string): void {
+  const file = excludeFile(root);
+  try {
+    mkdirSync(dirname(file), { recursive: true });
     const current = existsSync(file) ? readFileSync(file, "utf8") : "";
     if (!current.split(/\r?\n/).includes(line)) {
       appendFileSync(file, `${current.endsWith("\n") || current === "" ? "" : "\n"}${line}\n`);
     }
   } catch {
-    // .git may be a file (worktree/submodule); skip silently, the path is just untracked then.
+    // Not writable: the path is simply left untracked.
   }
 }
 
