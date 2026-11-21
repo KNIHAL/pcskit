@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind",
+    "postbuild": "node scripts/build-search.mjs",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "biome lint --error-on-warnings .",
