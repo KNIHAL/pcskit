@@ -22,6 +22,16 @@
   text-rendering: optimizeLegibility;
 }
 
+html:has(.mk),
+body:has(.mk) {
+  margin: 0;
+  background: #0b0c0d;
+}
+
+html:has(.mk) {
+  color-scheme: dark;
+}
+
 .mk *,
 .mk *::before,
 .mk *::after {
@@ -68,7 +78,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--mk-text) 16%, transparent);
   transition:
     background-color var(--mk-dur) var(--mk-ease),
     border-color var(--mk-dur) var(--mk-ease);
@@ -76,7 +86,7 @@
 
 .mk-header[data-scrolled="true"] {
   background: color-mix(in srgb, var(--mk-bg) 78%, transparent);
-  border-color: var(--mk-line);
+  border-color: color-mix(in srgb, var(--mk-text) 22%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
 }
 

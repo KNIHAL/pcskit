@@ -748,6 +748,71 @@
   }
 }
 
+/* Desktop hero: fit one screen. Mobile and tablet keep their existing, roomier layout. */
+@media (min-width: 901px) {
+  .mk-hero {
+    padding: 48px 0 56px;
+  }
+
+  .mk-hero__grid {
+    gap: 48px;
+  }
+
+  .mk-hero .mk-eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .mk-hero .mk-h1 {
+    max-width: none;
+    font-size: clamp(2.25rem, 3.7vw, 3.5rem);
+    line-height: 1.04;
+  }
+
+  .mk-hero .mk-lede {
+    max-width: 54ch;
+    margin-top: 18px;
+    font-size: 1rem;
+  }
+
+  .mk-hero .mk-actions {
+    margin-top: 24px;
+  }
+
+  .mk-hero .mk-cmd {
+    margin-top: 20px;
+    padding: 9px 12px;
+    font-size: 0.875rem;
+  }
+
+  .mk-hero .mk-legend {
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .mk-hero .mk-chip {
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 0.8125rem;
+  }
+
+  .brief__body {
+    gap: 12px;
+    padding: 16px 18px 18px;
+  }
+
+  .brief__title {
+    margin-bottom: 6px;
+  }
+
+  .brief__rows {
+    gap: 7px;
+  }
+
+  .brief__row {
+    font-size: 0.8125rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mk-hero__glow {
     animation: none;
