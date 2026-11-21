@@ -49,19 +49,19 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "chokidar": "^6.0.0",
-    "commander": "^12.1.0",
+    "commander": "^15.1.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
     "@emnapi/core": "2.0.0-beta.2",
     "@emnapi/runtime": "2.0.0-beta.2",
-    "@types/node": "^24.0.0",
+    "@types/node": "^25.9.9",
     "@vitest/coverage-v8": "^5.1.1",
     "fast-check": "^4.10.3",
-    "tsup": "^8.3.5",
+    "tsup": "^9.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.1.1"
   },
   "overrides": {
