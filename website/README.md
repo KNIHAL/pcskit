@@ -12,13 +12,13 @@ npm ci
 npm run dev          # http://localhost:3000
 ```
 
-| Script | Purpose |
-| --- | --- |
-| `npm run dev` | Dev server |
-| `npm run build` | Production build, then the Pagefind search index (`postbuild`) |
-| `npm run lint` | Biome lint, warnings fail |
-| `npm run format:check` / `npm run format` | Biome formatting |
-| `npm run typecheck` | Route types and `tsc --noEmit` |
+| Script                                    | Purpose                                                        |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| `npm run dev`                             | Dev server                                                     |
+| `npm run build`                           | Production build, then the Pagefind search index (`postbuild`) |
+| `npm run lint`                            | Biome lint, warnings fail                                      |
+| `npm run format:check` / `npm run format` | Biome formatting                                               |
+| `npm run typecheck`                       | Route types and `tsc --noEmit`                                 |
 
 CI (`.github/workflows/website.yml`) runs lint, format check, typecheck, build and `npm audit` for changes under `website/`.
 
