@@ -1,9 +1,7 @@
-const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-
-/** Canonical origin of the site. Set NEXT_PUBLIC_SITE_URL once a custom domain exists. */
+/** Canonical origin. Override with NEXT_PUBLIC_SITE_URL for previews. */
 export const siteUrl = (
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (productionHost ? `https://${productionHost}` : "http://localhost:3000")
+  (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://pcskit.causly.in")
 ).replace(/\/$/, "");
 
 export const site = {
