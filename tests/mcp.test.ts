@@ -73,6 +73,15 @@ describe("mcp: tools", () => {
     expect(by.pcs_resume).toBe(false);
   });
 
+  it("declares all four annotation hints as booleans on every tool", async () => {
+    const tools = (await (await connect()).listTools()).tools;
+    for (const t of tools) {
+      for (const hint of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"] as const) {
+        expect(typeof t.annotations?.[hint], `${t.name}.${hint}`).toBe("boolean");
+      }
+    }
+  });
+
   it("runs the full continuity loop through tool calls, attributing writes to the agent", async () => {
     const c = await connect({ agent: "claude" });
     expect((await call(c, "pcs_session_start", { agent: "claude" })).isError).toBe(false);

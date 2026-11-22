@@ -153,7 +153,7 @@ export function createMcpServer(options: McpOptions): McpServer {
     },
   );
 
-  const read = { readOnlyHint: true, openWorldHint: false } as const;
+  const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
   const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
 
   // --read-only: tools that can change anything are never registered, so the agent cannot even see them.
