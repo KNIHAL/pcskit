@@ -2,7 +2,7 @@
 
 **Your AI agent stopped. The next one picks up exactly where it left off.**
 
-[Website](https://pcskit.causly.in) · [Docs](https://pcskit.causly.in/docs) · [npm](https://www.npmjs.com/package/@knihal/pcskit)
+[Website](https://pcskit.causly.in) | [Docs](https://pcskit.causly.in/docs)
 
 [![CI](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml/badge.svg)](https://github.com/KNIHAL/pcskit/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@knihal/pcskit)](https://www.npmjs.com/package/@knihal/pcskit)
