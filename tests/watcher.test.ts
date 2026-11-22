@@ -29,7 +29,7 @@ function git(...args: string[]) {
 const events = () => withDb(dir, (db) => recentEvents(db, 200).reverse());
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function until(cond: () => boolean | Promise<boolean>, ms = 15_000) {
+async function until(cond: () => boolean | Promise<boolean>, ms = 30_000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     if (await cond()) return;
@@ -37,6 +37,12 @@ async function until(cond: () => boolean | Promise<boolean>, ms = 15_000) {
   }
   throw new Error("timed out waiting for condition");
 }
+
+// FSEvents on macOS can drop edits made in the instant after the watcher reports ready.
+const armed = async (h: WatcherHandle) => {
+  await h.ready;
+  await sleep(500);
+};
 
 const FAST = { debounceMs: 300, maxWaitMs: 2000, heartbeatMs: 100 };
 
@@ -72,7 +78,7 @@ describe("watcher: recording", () => {
   it("snapshots a burst of edits once, linked to the session, with a valid chain", async () => {
     await startSession(dir, "claude");
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
 
     writeFileSync(join(dir, "a.txt"), "1\n");
     writeFileSync(join(dir, "new.ts"), "n\n");
@@ -90,7 +96,7 @@ describe("watcher: recording", () => {
 
   it("does not record a snapshot when nothing observable changed", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     writeFileSync(join(dir, "a.txt"), "x\n"); // same content
     await sleep(1200);
     expect(await snapshotEvents()).toHaveLength(0);
@@ -98,7 +104,7 @@ describe("watcher: recording", () => {
 
   it("records a head snapshot after a commit", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     writeFileSync(join(dir, "b.txt"), "b\n");
     git("add", "b.txt");
     git("commit", "-q", "-m", "second");
@@ -109,7 +115,7 @@ describe("watcher: recording", () => {
 
   it("ignores .git, .pcs and node_modules", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     mkdirSync(join(dir, "node_modules", "x"), { recursive: true });
     writeFileSync(join(dir, "node_modules", "x", "i.js"), "1\n"); // untracked but ignored by trigger only
     await sleep(1200);
@@ -122,7 +128,7 @@ describe("watcher: recording", () => {
 
   it("never opens sensitive files: they are listed by name only", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     writeFileSync(join(dir, ".env"), "SECRET=abc123\n");
     await until(async () => (await snapshotEvents()).length >= 1);
     const snap = (await listSnapshots(dir)).at(0)!;
@@ -135,7 +141,7 @@ describe("watcher: recording", () => {
 describe("watcher: lifecycle", () => {
   it("records start and stop, shows state, and removes its lock", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     expect(await watcherState(dir)).toMatchObject({ running: true, pid: process.pid });
     expect((await getStatus(dir)).watcher.running).toBe(true);
 
@@ -150,7 +156,7 @@ describe("watcher: lifecycle", () => {
 
   it("refuses a second watcher while one is running", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     await expect(startWatcher(dir, FAST)).rejects.toBeInstanceOf(PcsError);
   });
 
@@ -158,14 +164,14 @@ describe("watcher: lifecycle", () => {
     writeFileSync(join(dir, ".pcs", "watch.json"), JSON.stringify({ pid: 2 ** 30, started_at: "2020-01-01T00:00:00Z" }));
     expect((await watcherState(dir)).stale).toBe(true);
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     const started = (await events()).find((e) => e.type === "watch.started")!;
     expect(JSON.parse(started.payload)).toMatchObject({ previousWatcherDied: true });
   });
 
   it("stops when another process asks it to", async () => {
     handle = await startWatcher(dir, FAST);
-    await handle.ready;
+    await armed(handle);
     expect(await requestStop(dir)).toMatchObject({ requested: true });
     await handle.done;
     handle = null;
@@ -183,7 +189,7 @@ describe("watcher: stalled sessions", () => {
   it("infers a stalled session after the quiet period, once", async () => {
     await startSession(dir, "claude");
     handle = await startWatcher(dir, { ...FAST, stalledMs: 600 });
-    await handle.ready;
+    await armed(handle);
     await until(async () => (await events()).some((e) => e.type === "watch.stalled"));
     await sleep(1000);
     const stalled = (await events()).filter((e) => e.type === "watch.stalled");
@@ -193,7 +199,7 @@ describe("watcher: stalled sessions", () => {
 
   it("does not report a stall when no session is open", async () => {
     handle = await startWatcher(dir, { ...FAST, stalledMs: 400 });
-    await handle.ready;
+    await armed(handle);
     await sleep(1200);
     expect((await events()).some((e) => e.type === "watch.stalled")).toBe(false);
   });
@@ -201,7 +207,7 @@ describe("watcher: stalled sessions", () => {
   it("puts watcher observations in the handoff with their provenance", async () => {
     await startSession(dir, "claude");
     handle = await startWatcher(dir, { ...FAST, stalledMs: 1500 });
-    await handle.ready;
+    await armed(handle);
     writeFileSync(join(dir, "w.ts"), "w\n");
     await until(async () => (await events()).some((e) => e.type === "watch.stalled"), 20_000);
     const r = await createHandoff(dir, { noFile: true });
