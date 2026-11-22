@@ -159,8 +159,8 @@ function platformOf(env: AutostartEnv): AutostartPlatform {
   return p;
 }
 
-async function must(exec: Exec, cmd: string, args: string[], what: string): Promise<void> {
-  const r = await exec(cmd, args);
+async function must(run: Exec, cmd: string, args: string[], what: string): Promise<void> {
+  const r = await run(cmd, args);
   if (r.code !== 0) throw new PcsError("INVALID_INPUT", `${what} failed: ${(r.stderr || r.stdout).trim().split("\n")[0] ?? `exit ${r.code}`}`);
 }
 
@@ -174,51 +174,51 @@ export async function installAutostart(cwd: string, env: AutostartEnv = {}, targ
   const root = await requireInitializedRoot(cwd);
   const t: AutostartTarget = { ...currentTarget(root), ...target };
   const platform = platformOf(env);
-  const exec = env.exec ?? defaultExec;
+  const run = env.exec ?? defaultExec;
   const name = serviceName(t.root);
   const p = paths(name, env);
 
   if (platform === "win32") {
-    await must(exec, "reg", ["add", WINDOWS_RUN_KEY, "/v", name, "/t", "REG_SZ", "/d", windowsRunValue(t), "/f"], "Adding the Run entry");
+    await must(run, "reg", ["add", WINDOWS_RUN_KEY, "/v", name, "/t", "REG_SZ", "/d", windowsRunValue(t), "/f"], "Adding the Run entry");
     // Start now with a hidden console of its own (conhost --headless exits at once without inherited handles).
     (env.start ?? defaultStart)(t.node, [t.cli, "watch", "--project", t.root]);
     return { platform, name, note: "Runs at every logon (current user); started now." };
   }
   if (platform === "linux") {
     writeAtomic(p.unit, systemdUnit(t));
-    await must(exec, "systemctl", ["--user", "daemon-reload"], "systemctl daemon-reload");
-    await must(exec, "systemctl", ["--user", "enable", "--now", `${name}.service`], "Enabling the systemd user service");
+    await must(run, "systemctl", ["--user", "daemon-reload"], "systemctl daemon-reload");
+    await must(run, "systemctl", ["--user", "enable", "--now", `${name}.service`], "Enabling the systemd user service");
     return { platform, name, file: p.unit, note: "To keep it running when you are logged out: loginctl enable-linger $USER" };
   }
   const label = `dev.${name}`;
   const uid = env.uid ?? (typeof process.getuid === "function" ? process.getuid() : 501);
   writeAtomic(p.plist, launchdPlist(t, label));
-  await exec("launchctl", ["bootout", `gui/${uid}/${label}`]); // ignore "not loaded"
-  await must(exec, "launchctl", ["bootstrap", `gui/${uid}`, p.plist], "Loading the launchd agent");
+  await run("launchctl", ["bootout", `gui/${uid}/${label}`]); // ignore "not loaded"
+  await must(run, "launchctl", ["bootstrap", `gui/${uid}`, p.plist], "Loading the launchd agent");
   return { platform, name, file: p.plist, note: "Runs at every login; started now." };
 }
 
 export async function uninstallAutostart(cwd: string, env: AutostartEnv = {}, rootOverride?: string): Promise<AutostartResult & { removed: boolean }> {
   const root = rootOverride ?? (await requireInitializedRoot(cwd));
   const platform = platformOf(env);
-  const exec = env.exec ?? defaultExec;
+  const run = env.exec ?? defaultExec;
   const name = serviceName(root);
   const p = paths(name, env);
   let removed = false;
 
   if (platform === "win32") {
-    const r = await exec("reg", ["delete", WINDOWS_RUN_KEY, "/v", name, "/f"]);
+    const r = await run("reg", ["delete", WINDOWS_RUN_KEY, "/v", name, "/f"]);
     removed = r.code === 0;
   } else if (platform === "linux") {
-    await exec("systemctl", ["--user", "disable", "--now", `${name}.service`]);
+    await run("systemctl", ["--user", "disable", "--now", `${name}.service`]);
     if (existsSync(p.unit)) {
       rmSync(p.unit);
       removed = true;
-      await exec("systemctl", ["--user", "daemon-reload"]);
+      await run("systemctl", ["--user", "daemon-reload"]);
     }
   } else {
     const uid = env.uid ?? (typeof process.getuid === "function" ? process.getuid() : 501);
-    await exec("launchctl", ["bootout", `gui/${uid}/dev.${name}`]);
+    await run("launchctl", ["bootout", `gui/${uid}/dev.${name}`]);
     if (existsSync(p.plist)) {
       rmSync(p.plist);
       removed = true;
@@ -235,11 +235,11 @@ export async function uninstallAutostart(cwd: string, env: AutostartEnv = {}, ro
 export async function autostartStatus(cwd: string, env: AutostartEnv = {}): Promise<AutostartResult & { installed: boolean }> {
   const root = await requireInitializedRoot(cwd);
   const platform = platformOf(env);
-  const exec = env.exec ?? defaultExec;
+  const run = env.exec ?? defaultExec;
   const name = serviceName(root);
   const p = paths(name, env);
   if (platform === "win32") {
-    const r = await exec("reg", ["query", WINDOWS_RUN_KEY, "/v", name]);
+    const r = await run("reg", ["query", WINDOWS_RUN_KEY, "/v", name]);
     return { platform, name, installed: r.code === 0 };
   }
   if (platform === "linux") {
