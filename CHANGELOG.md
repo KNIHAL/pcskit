@@ -2,6 +2,17 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-23
+
+### Added
+
+- MCP Registry metadata (`server.json` and `mcpName`) so the server can be listed in the official MCP Registry.
+
+### Changed
+
+- Every MCP tool now declares all four annotation hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
+- The project is now presented as Project Continuity Kit (PCSKit). The npm package, install command and `pcs` command are unchanged.
+
 ## [0.1.0] - 2026-11-20
 
 First release.

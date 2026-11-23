@@ -143,7 +143,7 @@ export function createMcpServer(options: McpOptions): McpServer {
   const agentArg = z.string().max(64).optional().describe("Leave empty: PCS already knows who you are (your session, or this server's configured name).");
 
   const server = new McpServer(
-    { name: "pcs", version: "0.1.0" },
+    { name: "pcs", version: "0.1.1" },
     {
       instructions:
         "PCSKit (Project Continuity Kit) keeps verified evidence of what happened in this project so work survives a stopped agent. " +

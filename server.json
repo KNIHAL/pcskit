@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.KNIHAL/pcskit",
+  "description": "Hand work between AI coding agents with evidence-labelled, tamper-evident handoffs.",
+  "repository": {
+    "url": "https://github.com/KNIHAL/pcskit",
+    "source": "github"
+  },
+  "websiteUrl": "https://pcskit.causly.in",
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@knihal/pcskit",
+      "version": "0.1.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

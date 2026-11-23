@@ -182,7 +182,7 @@ function formatComparison(c: SnapshotComparison): string {
 }
 
 const program = new Command();
-program.name("pcs").description("Project Continuity Kit").version("0.1.0");
+program.name("pcs").description("Project Continuity Kit").version("0.1.1");
 
 program
   .command("init")
