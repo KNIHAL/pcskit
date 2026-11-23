@@ -1,4 +1,4 @@
-# PCS: Project Continuity System
+# PCSKit: Project Continuity Kit
 
 **Your AI agent stopped. The next one picks up exactly where it left off.**
 
@@ -8,7 +8,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22.13-339933)](package.json)
 [![M8ven Score](https://m8ven.ai/badge/mcp/knihal-pcskit-jcnxsq?v=f457837410ce32721a170861fa36079f)](https://m8ven.ai/mcp/knihal-pcskit-jcnxsq?s=readme)
 
-PCS is a local-first command line tool and MCP server that hands work from one AI coding agent to the next. When an agent hits a token limit, you start a new chat, or you switch from Claude to Cursor, PCS rebuilds what actually happened in the project from git and recorded evidence, and gives the next agent a brief it can trust.
+PCSKit is a local-first command line tool (`pcs`) and MCP server that hands work from one AI coding agent to the next. When an agent hits a token limit, you start a new chat, or you switch from Claude to Cursor, PCSKit rebuilds what actually happened in the project from git and recorded evidence, and gives the next agent a brief it can trust.
 
 Never trust an agent's "done". PCS keeps what it saw itself apart from what an agent claimed.
 

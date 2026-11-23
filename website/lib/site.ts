@@ -5,11 +5,11 @@ export const siteUrl = (
 ).replace(/\/$/, "");
 
 export const site = {
-  name: "PCS",
-  fullName: "PCS: Project Continuity System",
+  name: "PCSKit",
+  fullName: "PCSKit: Project Continuity Kit",
   tagline: "Your AI agent stopped. The next one picks up exactly where it left off.",
   description:
-    "PCS is a local-first CLI and MCP server that hands work from one AI coding agent to the next, with every fact labelled verified, reported or inferred.",
+    "PCSKit is a local-first CLI and MCP server that hands work from one AI coding agent to the next, with every fact labelled verified, reported or inferred.",
   version: "0.1.0",
   license: "Apache-2.0",
   packageName: "@knihal/pcskit",

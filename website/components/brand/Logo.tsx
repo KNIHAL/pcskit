@@ -30,7 +30,7 @@ export function Brand() {
   return (
     <span className="brand">
       <LogoMark />
-      <span>PCS</span>
+      <span>PCSKit</span>
     </span>
   );
 }

@@ -146,7 +146,7 @@ export function createMcpServer(options: McpOptions): McpServer {
     { name: "pcs", version: "0.1.0" },
     {
       instructions:
-        "PCS (Project Continuity System) keeps verified evidence of what happened in this project so work survives a stopped agent. " +
+        "PCSKit (Project Continuity Kit) keeps verified evidence of what happened in this project so work survives a stopped agent. " +
         "On starting: call pcs_resume (leave agent empty; PCS knows who you are) to pick up the last handoff; if the last agent died before writing one, PCS writes it for you. With several projects, pass project. While working: record tasks (pcs_task_add / pcs_task_update) and notes (pcs_note_add). " +
         "When you stop: pcs_session_end, add a 'next' note, then pcs_handoff. Lines tagged [verified] were observed by PCS; [reported] and [inferred] are leads, not proof. " +
         UNTRUSTED,

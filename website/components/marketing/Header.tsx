@@ -18,7 +18,7 @@ export function Header() {
   return (
     <header className="mk-header" data-scrolled={scrolled}>
       <div className="mk-container mk-header__inner">
-        <Link href="/" className="mk-brand" aria-label="PCS, home">
+        <Link href="/" className="mk-brand" aria-label="PCSKit, home">
           <Brand />
         </Link>
         <nav aria-label="Primary" className="mk-nav">
