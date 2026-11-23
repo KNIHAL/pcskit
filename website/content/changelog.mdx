@@ -1,6 +1,6 @@
 ---
 title: Changelog
-description: Release notes for PCS. The canonical changelog is CHANGELOG.md in the repository.
+description: Release notes for PCSKit. The canonical changelog is CHANGELOG.md in the repository.
 ---
 
 import { Callout } from "nextra/components";
@@ -10,9 +10,20 @@ import { Callout } from "nextra/components";
 All notable changes are listed in [CHANGELOG.md](https://github.com/KNIHAL/pcskit/blob/main/CHANGELOG.md), which follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/). Releases are on [GitHub](https://github.com/KNIHAL/pcskit/releases) and [npm](https://www.npmjs.com/package/@knihal/pcskit).
 
 <Callout type="info">
-  This page shows the first release. For anything newer, the repository's `CHANGELOG.md` is the
+  This page mirrors the latest releases. If it ever lags, the repository's `CHANGELOG.md` is the
   source of truth.
 </Callout>
+
+## 0.1.1 (2026-11-23)
+
+### Added
+
+- MCP Registry metadata (`server.json` and `mcpName`) so the server can be listed in the official MCP Registry.
+
+### Changed
+
+- Every MCP tool now declares all four annotation hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
+- The project is now presented as Project Continuity Kit (PCSKit). The npm package, install command and `pcs` command are unchanged.
 
 ## 0.1.0 (2026-11-20)
 
